@@ -1,0 +1,16 @@
+{
+  "name": "pulse-app",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=pulse-web && npm run build --workspace=pulse-server",
+    "start": "npm run start --workspace=pulse-server"
+  }
+}

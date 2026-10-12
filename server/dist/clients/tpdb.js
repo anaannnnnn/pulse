@@ -282,9 +282,9 @@ export class TpdbClient {
         const j = await this.get(`/${PATHS[type]}`, { ...params, per_page: perPage }, undefined, signal);
         return j.data || [];
     }
-    /** Like list() but also returns paging meta (total / last_page): used to page through a performer's or site's whole scene list. */
+    /** Like list() but also returns paging meta (total / last_page). Pages are cached so a performer or studio list is downloaded once. */
     async listPage(type, params, perPage = 100, signal) {
-        const j = await this.get(`/${PATHS[type]}`, { ...params, per_page: perPage }, undefined, signal, { noStore: true });
+        const j = await this.get(`/${PATHS[type]}`, { ...params, per_page: perPage }, 30 * 864e5, signal);
         return { data: j.data || [], total: Number(j.meta?.total ?? 0), lastPage: Number(j.meta?.last_page ?? 1) || 1 };
     }
     /** Studio/site lookup: /sites?q= */

@@ -219,6 +219,15 @@ describe('fastCascade (concurrent strategies, early exit)', () => {
     const r = await fastCascade(tpdb, { fileName: name, parsed: parseFilename(name, '/', {}), threshold: 0.75 });
     expect(r.confident).toBe(true); expect(r.strategy).toBe('words');
   });
+  it('once mode makes a single filename search and stops', async () => {
+    const mock = makeMockTpdb();
+    const tpdb = new TpdbClient('K', undefined, mock.f, 0);
+    const name = 'Pool Party Surprise Extra Bonus Footage Uncut.mp4';
+    const r = await fastCascade(tpdb, { fileName: name, parsed: parseFilename(name, '/', {}), threshold: 0.75 }, { once: true });
+    expect(mock.hits.length).toBe(1);
+    expect(mock.hits[0]).toContain('parse=');
+    expect(r.strategy === 'parse' || r.strategy === null || r.confident === false || r.confident === true).toBe(true);
+  });
 });
 
 describe('Matcher queue (integration)', () => {

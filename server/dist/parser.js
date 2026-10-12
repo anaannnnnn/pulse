@@ -345,6 +345,18 @@ export function isVideo(name) {
     const m = name.match(/\.([A-Za-z0-9]+)$/);
     return !!m && VIDEO_EXTS.includes(m[1].toLowerCase()) && !/\bsample\b/i.test(name);
 }
+/** Phone clips, date-only names, and files with no studio, performer, code or title. Bulk matching skips these. */
+const CAMERA_NAME = /^(?:img|dsc|dscn|dscf|pxl|mvi|gopr|dji|vid|mov|video|clip|screenrecording|screen|rec|movie|cam|whatsapp|wa)[-_ ]?\d|^whatsapp\b/i;
+const DATE_ONLY_NAME = /^(?:19|20)\d{2}[-_. ]?\d{2}[-_. ]?\d{2}(?:[-_. T]?\d{2,6})*$/;
+export function isUnsearchable(fileName, parsed) {
+    const base = fileName.replace(/\.[A-Za-z0-9]{1,5}$/i, '').trim();
+    if (CAMERA_NAME.test(base) || DATE_ONLY_NAME.test(base))
+        return true;
+    if (parsed.jav || parsed.performers.length || parsed.studio || parsed.studioHints?.length)
+        return false;
+    const words = (parsed.words || []).filter((w) => w.length > 2 && !/^\d+$/.test(w));
+    return words.length < 2;
+}
 export function isSubtitle(name) {
     const m = name.match(/\.([A-Za-z0-9]+)$/);
     return !!m && SUB_EXTS.includes(m[1].toLowerCase());

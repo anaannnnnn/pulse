@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFilename, isVideo, srtToVtt, subtitleLang, splitPerformers } from '../src/parser.js';
+import { parseFilename, isVideo, srtToVtt, subtitleLang, splitPerformers, isUnsearchable } from '../src/parser.js';
 
 describe('parseFilename', () => {
   it('parses scene release style', () => {
@@ -79,5 +79,13 @@ describe('helpers', () => {
   });
   it('splitPerformers', () => {
     expect(splitPerformers('A B, C D and E F feat. G H')).toEqual(['A B', 'C D', 'E F', 'G H']);
+  });
+  it('isUnsearchable skips phone clips and keeps real titles', () => {
+    const skip = (n: string) => isUnsearchable(n, parseFilename(n, '/', {}));
+    expect(skip('IMG_4421.mov')).toBe(true);
+    expect(skip('2024-03-02.mp4')).toBe(true);
+    expect(skip('VID_20240101_WA0001.mp4')).toBe(true);
+    expect(skip('Pool Party Surprise Extra Bonus Footage.mp4')).toBe(false);
+    expect(skip('Brazzers.21.05.12.Kendra.Lust.XXX.1080p.mp4')).toBe(false);
   });
 });

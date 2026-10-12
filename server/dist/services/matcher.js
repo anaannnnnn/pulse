@@ -1,6 +1,6 @@
 import { nameKey } from '../db.js';
 import { pickImage, FATAL_TPDB } from '../clients/tpdb.js';
-import { parseFilename } from '../parser.js';
+import { parseFilename, isUnsearchable } from '../parser.js';
 import { config } from '../config.js';
 import { fastCascade, planGroups, matchGroup } from './bulkMatcher.js';
 import { runCascade, toCandidate } from './matchEngine.js';
@@ -95,7 +95,8 @@ export class Matcher {
     fastPath = true;
     /** Resolve performer / studio groups once and match their files locally. */
     groupMatching = true;
-    minGroupSize = 3;
+    /** Two files that share a performer or studio are enough to fetch that list once. */
+    minGroupSize = 2;
     /** Max TPDB requests of the sequential fallback cascade per file in bulk runs (manual search keeps its own budget). */
     fallbackBudget = Math.max(4, config.matchFallbackBudget || 6);
     /** Compute OSHASH (ranged pCloud reads) during bulk matching. Off by default: hashing is slow and only a last resort. */
@@ -149,12 +150,12 @@ export class Matcher {
             throw Object.assign(new Error('Scene not found'), { statusCode: 404, code: 'not_found' });
         const parsed = this.reparse(row);
         const useHash = !opts.query && !opts.type && ((!!this.hashProvider && row.source === 'pcloud' && (!opts.fast || this.bulkHash)) || !!row.oshash);
-        const cascade = opts.fast && this.fastPath ? (t, i) => fastCascade(t, i, { fallbackBudget: this.fallbackBudget, signal: this.runAbort?.signal, quick: this.quickIds.has(sceneId) }) : runCascade;
+        const cascade = opts.fast && this.fastPath ? (t, i) => fastCascade(t, i, { fallbackBudget: this.fallbackBudget, signal: this.runAbort?.signal, quick: this.quickIds.has(sceneId), once: opts.once }) : runCascade;
         const res = await cascade(this.tpdb, {
             fileName: row.file_name, folderPath: String(row.path || '').replace(/\/[^/]*$/, ''), parsed, duration: row.duration, query: opts.query, types: opts.type ? [opts.type] : undefined,
             threshold: this.threshold, budget: opts.budget, shouldStop: opts.shouldStop ?? (() => this.cancelled),
             hash: useHash ? () => (row.oshash ? Promise.resolve(String(row.oshash)) : this.safeHash(row)) : undefined,
-            stash: this.useStash() ? this.stash : null, useTpdb: this.useTpdb(),
+            stash: opts.once ? null : (this.useStash() ? this.stash : null), useTpdb: this.useTpdb(),
             fingerprints: row.oshash ? { oshash: String(row.oshash) } : {},
             onHash: (h) => { try {
                 this.db.prepare('UPDATE scenes SET oshash=? WHERE id=?').run(h, sceneId);
@@ -381,9 +382,20 @@ export class Matcher {
         const row = this.lib.sceneRow(id);
         if (!row || ['matched', 'manual', 'ignored'].includes(row.match_status))
             return;
+        const parsed = this.reparse(row);
         this.status.current = { sceneId: id, title: row.title || row.file_name };
+        if (!this.thorough && isUnsearchable(row.file_name, parsed)) {
+            this.db.prepare(`UPDATE scenes SET parsed=?, match_status='unmatched', match_strategy='skipped', match_confidence=NULL, match_alts=NULL, match_query=NULL, match_tried_at=?, match_error=NULL, match_error_code=NULL WHERE id=?`)
+                .run(JSON.stringify(parsed), new Date().toISOString(), id);
+            this.status.unmatched++;
+            this.status.processed++;
+            this.completed.push(Date.now());
+            const k = 'skipped';
+            this.status.strategies[k] = (this.status.strategies[k] || 0) + 1;
+            return;
+        }
         try {
-            const r = await this.search(id, { fast: true });
+            const r = await this.search(id, { fast: true, once: !this.thorough });
             const best = r.best;
             if (best && r.raw && (best.source ?? 'tpdb') === 'tpdb')
                 this.hints.set(`${best.type}:${best.tpdbId}`, r.raw);

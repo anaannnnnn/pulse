@@ -17,7 +17,7 @@ import { buildProfile, candStudioKeys, makeScorer, resolveAmbiguity, runCascade,
 import type { Alt, EngineInput, EngineResult, MatchCandidate, Pooled, Profile } from './matchEngine.js';
 
 export type FastResult = EngineResult & { /** raw TPDB scene object of `best` (lets the caller skip the extra GET /scenes/{id}) */ raw?: any };
-export type FastOptions = { fallbackBudget?: number; signal?: AbortSignal; /** stop after the concurrent tiers (no sequential fallback cascade): for files whose performer's whole scene list was already checked */ quick?: boolean };
+export type FastOptions = { fallbackBudget?: number; signal?: AbortSignal; /** stop after the concurrent tiers (no sequential fallback cascade): for files whose performer's whole scene list was already checked */ quick?: boolean; /** bulk run: one filename search, then stop. No studio lookup, no word cascade, no StashDB. */ once?: boolean };
 
 const looksName = (s: string) => { const t = s.trim().split(/\s+/); return t.length >= 1 && t.length <= 3 && t.every((w) => /^[A-Za-z'’.-]{2,}$/.test(w)); };
 const rankWords = (ws: string[]) => [...new Set(ws)].sort((a, b) => b.length - a.length);
@@ -114,6 +114,16 @@ export async function fastCascade(tpdb: TpdbClient, input: EngineInput, opts: Fa
   };
 
   try {
+    // Bulk matching: one filename search. Anything this does not decide is left unmatched.
+    if (opts.once) {
+      const rawBase = input.fileName.replace(/\.[A-Za-z0-9]{2,5}$/, '');
+      const qstr = (prof.jav || input.parsed.query || rawBase).trim();
+      const type: TpdbType = prof.jav ? 'jav' : 'scene';
+      const params = prof.jav ? { q: qstr } : { parse: qstr };
+      await runTier([() => flat([q(prof.jav ? 'jav' : 'parse', type, params, 8)])]);
+      return finish(true);
+    }
+
     // ---------------- tier 1: parse / JAV
     const tier1: (() => Promise<TaskOut>)[] = [];
     const first: TpdbType = 'scene';

@@ -647,7 +647,7 @@ export async function runCascade(tpdb, input) {
             const folder = (input.parsed.folderHints || []).filter((h) => !hints.some((x) => keyOf(x) === keyOf(h)));
             try {
                 stashQueries = await runStashStage({
-                    stash: input.stash, manual, signal: stashAbort.signal, budget: manual ? 14 : 12,
+                    stash: input.stash, manual, signal: stashAbort.signal, budget: manual ? 14 : 3,
                     studioHints: hints, folderHints: folder, rawWords: prof.rawWords, titleWords, date: prof.date, perfNames: () => [...prof.perfNames],
                     fingerprints: input.fingerprints || {}, getHash: manual ? undefined : getHash,
                     add: (label, scenes) => { okQueries++; for (const sc of scenes)
@@ -690,9 +690,13 @@ export async function runCascade(tpdb, input) {
             break;
     }
     if (stashTask) {
-        if (input.shouldStop?.() || (!exhaustive && confident()))
-            stashAbort.abort(); // already confident: don't wait for the slower provider
-        await stashTask;
+        if (input.shouldStop?.() || (!exhaustive && confident())) {
+            // A confident ThePornDB hit must not sit behind StashDB. Abort and move on; the in-flight request ends on its own.
+            stashAbort.abort();
+            void stashTask.then(() => { }, () => { });
+        }
+        else
+            await stashTask;
     }
     // Nothing could be searched at all -> surface the real reason instead of silently reporting "no match".
     if (okQueries === 0 && errs.length) {

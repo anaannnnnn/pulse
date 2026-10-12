@@ -41,7 +41,7 @@ export const config = {
   tpdbMaxRps: Number(process.env.TPDB_MAX_RPS || 10),
   tpdbStartRps: Number(process.env.TPDB_START_RPS || 8),
   matchConcurrency: Number(process.env.MATCH_CONCURRENCY || 10),
-  matchFallbackBudget: Number(process.env.MATCH_FALLBACK_BUDGET || 16),
+  matchFallbackBudget: Number(process.env.MATCH_FALLBACK_BUDGET || 6),
   scanConcurrency: Number(process.env.SCAN_CONCURRENCY || 6),
   // unit tests (vitest) never pick up a real key from the environment or .env; tests pass `env: { stashdbKey }` explicitly
   /** ThePornDB API root; override when the default host is blocked (own proxy / mirror). */

@@ -10,7 +10,7 @@
 //     look up the performer/site, page through its scene list (100 per page, a few pages in parallel) and match every file of the
 //     group locally by title similarity with the normal scorer. No per-file API calls at all for the files that match.
 import { FATAL_TPDB } from '../clients/tpdb.js';
-import { keyOf, norm, sigTokens, tick, tokens } from '../text.js';
+import { keyOf, sigTokens, tick, tokens } from '../text.js';
 import { isAbort } from './rateLimiter.js';
 import { buildProfile, candStudioKeys, makeScorer, resolveAmbiguity, runCascade, scorePool, toCandidate } from './matchEngine.js';
 const looksName = (s) => { const t = s.trim().split(/\s+/); return t.length >= 1 && t.length <= 3 && t.every((w) => /^[A-Za-z'’.-]{2,}$/.test(w)); };
@@ -27,12 +27,6 @@ export async function fastCascade(tpdb, input, opts = {}) {
     if (input.query != null || input.types?.length || input.useTpdb === false)
         return runCascade(tpdb, input);
     const prof = buildProfile(input);
-    // StashDB (when configured) is queried concurrently by the regular cascade machinery with ThePornDB switched off; if the TPDB tiers
-    // decide first, a StashDB twin of the same scene is only recorded as `alsoOn` (like the sequential cascade does).
-    let stashStop = false;
-    const stashP = input.stash?.configured
-        ? runCascade(tpdb, { ...input, useTpdb: false, hash: undefined, shouldStop: () => stashStop || !!input.shouldStop?.() }).catch(() => null)
-        : null;
     const ctl = new AbortController();
     const onExt = () => ctl.abort();
     opts.signal?.addEventListener('abort', onExt, { once: true });
@@ -269,7 +263,6 @@ export async function fastCascade(tpdb, input, opts = {}) {
         return finish(false);
     // ---------------- not confident: the full sequential cascade (word-by-word, fuzzy, other endpoints, hash, StashDB...).
     // Everything asked above is cached, so its first stages cost nothing.
-    stashStop = true;
     if (opts.quick)
         return finish(false);
     return await runCascade(tpdb, { ...input, budget: opts.fallbackBudget ?? input.budget });
@@ -278,22 +271,8 @@ export async function fastCascade(tpdb, input, opts = {}) {
         const r = buildResult(scored(), input.threshold, { queries, tried, query: prof.rawWords.join(' '), errors: errs, queriesOk: okQueries });
         if (!r.confident && okQueries === 0 && errs.length)
             throw Object.assign(new Error(errs[0].message), { code: errs[0].code, statusCode: 502 });
-        return stashP ? attachStashTwin(r, stashP, () => { stashStop = true; }) : r;
+        return r;
     }
-}
-/** Waits (briefly) for the StashDB-only search and records its twin of the chosen scene as `alsoOn` (same normalised title + date). */
-async function attachStashTwin(r, stashP, stop) {
-    stop();
-    const sr = await stashP;
-    const best = r.best;
-    const twin = sr?.candidates.find((c) => c.source === 'stashdb');
-    if (best && twin && norm(twin.title) && norm(twin.title) === norm(best.title) && (twin.date || '') === (best.date || '')) {
-        const also = [{ source: 'stashdb', id: twin.tpdbId }];
-        best.alsoOn = also;
-        if (r.alternatives[0])
-            r.alternatives[0].alsoOn = also;
-    }
-    return r;
 }
 /** Leading "Name - " of clip-store style names ("Mandy Marx - Pain To Play.mp4"). */
 const PREFIX = /^([A-Z][A-Za-z'’.-]+(?: [A-Z][A-Za-z'’.-]+){0,2}) +[-–—] +/;

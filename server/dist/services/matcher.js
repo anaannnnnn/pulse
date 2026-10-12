@@ -97,7 +97,7 @@ export class Matcher {
     groupMatching = true;
     minGroupSize = 3;
     /** Max TPDB requests of the sequential fallback cascade per file in bulk runs (manual search keeps its own budget). */
-    fallbackBudget = Math.max(6, config.matchFallbackBudget || 16);
+    fallbackBudget = Math.max(4, config.matchFallbackBudget || 6);
     /** Compute OSHASH (ranged pCloud reads) during bulk matching. Off by default: hashing is slow and only a last resort. */
     bulkHash = false;
     /** Optional OSHASH provider (pCloud ranged reads); only consulted as the very last strategy. */

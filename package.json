@@ -11,6 +11,6 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=pulse-web && npm run build --workspace=pulse-server",
-    "start": "npm run start --workspace=pulse-server"
+    "start": "node server/dist/index.js"
   }
 }

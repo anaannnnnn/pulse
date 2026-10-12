@@ -1,0 +1,7 @@
+WEBVTT
+
+00:01.000 --> 00:05.000
+Subtitles load from sidecar .srt files next to the video.
+
+00:06.000 --> 00:10.000
+They are converted to WebVTT by the Pulse server.

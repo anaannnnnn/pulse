@@ -1,10 +1,8 @@
-node_modules/
-dist/
+node_modules
 data/
 data-*/
-
+.env
 *.log
-
 
 # QA screenshots taken against a real account (personal data)
 docs/screens/real-*.png

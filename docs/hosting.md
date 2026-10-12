@@ -57,21 +57,11 @@ Open `https://pulse.yourdomain.com`.
 
 ## Option C — Cloudways
 
-The repo is the source. Cloudways must build it (Node **22.13+**). `web/dist` and `server/dist` are not committed.
+Cloudways runs `npm install` and then `npm start`. It does not run a build, so the compiled server and web app are already in the repo. Node **22.13 or newer** (Node 24 is fine).
 
 1. In Cloudways, add a **Node.js** application and set the Node version to **22** or newer. Point a domain at it.
-2. SSH into the server, go to the application folder, and clone this repo:
-
-```bash
-git clone https://github.com/anaannnnnn/pulse.git pulse
-cd pulse
-npm install
-npm run build
-cp server/.env.example server/.env
-nano server/.env
-```
-
-3. In `server/.env` set at least:
+2. Deploy this GitHub repo. Cloudways will detect `PORT` from its own `.env` (for example `3001`). Pulse listens on that port.
+3. In the application `.env` (or Cloudways environment variables) set:
 
 ```
 HOST=0.0.0.0
@@ -83,29 +73,19 @@ STASHDB_API_KEY=
 TORBOX_API_KEY=
 ```
 
-`PORT` is set by Cloudways. Leave it.
+Do not change `PORT`. Cloudways sets it.
 
-4. Start command (Cloudways application settings, or pm2):
+4. The start command must stay:
 
 ```bash
 npm start
 ```
 
-That serves the API and the built web app on the port Cloudways proxies.
-
 5. In the pCloud app settings add this redirect URI:
 
 `https://your-domain.com/api/pcloud/callback`
 
-After you change the code, pull and rebuild:
-
-```bash
-git pull
-npm install
-npm run build
-# restart the Node process from the Cloudways panel
-```
-
+Redeploy after a new push. No `npm run build` on the server.
 ## Option B — Cloudflare Tunnel from your Windows PC
 
 Keeps the server on your PC. Free. Your PC must stay on and running Pulse whenever you use the site.

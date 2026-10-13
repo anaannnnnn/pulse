@@ -148,12 +148,12 @@ export class Matcher {
     if (!row) throw Object.assign(new Error('Scene not found'), { statusCode: 404, code: 'not_found' });
     const parsed = this.reparse(row);
     const useHash = !opts.query && !opts.type && ((!!this.hashProvider && row.source === 'pcloud' && (!opts.fast || this.bulkHash)) || !!row.oshash);
-    const cascade = opts.fast && this.fastPath ? (t: TpdbClient, i: Parameters<typeof runCascade>[1]) => fastCascade(t, i, { fallbackBudget: this.fallbackBudget, signal: this.runAbort?.signal, quick: this.quickIds.has(sceneId), once: opts.once }) : runCascade;
+    const cascade = opts.fast && this.fastPath ? (t: TpdbClient, i: Parameters<typeof runCascade>[1]) => fastCascade(t, i, { fallbackBudget: this.thorough ? Math.max(16, this.fallbackBudget) : this.fallbackBudget, signal: this.runAbort?.signal, quick: this.quickIds.has(sceneId), once: opts.once }) : runCascade;
     const res = await cascade(this.tpdb, {
       fileName: row.file_name, folderPath: String(row.path || '').replace(/\/[^/]*$/, ''), parsed, duration: row.duration, query: opts.query, types: opts.type ? [opts.type] : undefined,
       threshold: this.threshold, budget: opts.budget, shouldStop: opts.shouldStop ?? (() => this.cancelled),
       hash: useHash ? () => (row.oshash ? Promise.resolve(String(row.oshash)) : this.safeHash(row)) : undefined,
-      stash: opts.once ? null : (this.useStash() ? this.stash : null), useTpdb: this.useTpdb(),
+      stash: this.useStash() ? this.stash : null, useTpdb: this.useTpdb(),
       fingerprints: row.oshash ? { oshash: String(row.oshash) } : {},
       onHash: (h) => { try { this.db.prepare('UPDATE scenes SET oshash=? WHERE id=?').run(h, sceneId); } catch { /* cache only */ } },
     });

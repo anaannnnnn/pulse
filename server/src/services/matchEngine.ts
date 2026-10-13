@@ -509,7 +509,7 @@ export async function runCascade(tpdb: TpdbClient, input: EngineInput): Promise<
         const folder = (input.parsed.folderHints || []).filter((h) => !hints.some((x) => keyOf(x) === keyOf(h)));
         try {
           stashQueries = await runStashStage({
-            stash: input.stash!, manual, signal: stashAbort.signal, budget: manual ? 14 : 3,
+            stash: input.stash!, manual, signal: stashAbort.signal, budget: manual ? 14 : 6,
             studioHints: hints, folderHints: folder, rawWords: prof.rawWords, titleWords, date: prof.date, perfNames: () => [...prof.perfNames],
             fingerprints: input.fingerprints || {}, getHash: manual ? undefined : getHash,
             add: (label, scenes) => { okQueries++; for (const sc of scenes) addStash(label, sc); },

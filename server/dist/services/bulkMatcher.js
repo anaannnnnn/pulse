@@ -156,7 +156,12 @@ export async function fastCascade(tpdb, input, opts = {}) {
             const type = prof.jav ? 'jav' : 'scene';
             const params = prof.jav ? { q: qstr } : { parse: qstr };
             await runTier([() => flat([q(prof.jav ? 'jav' : 'parse', type, params, 8)])]);
-            return finish(true);
+            const r = await finish(true);
+            if (r.confident || !input.stash?.configured || input.shouldStop?.())
+                return r;
+            // Undecided by ThePornDB: ask StashDB alone, with its own small budget. No further ThePornDB requests.
+            const s = await runCascade(tpdb, { ...input, useTpdb: false }).catch(() => null);
+            return s?.confident ? s : r;
         }
         // ---------------- tier 1: parse / JAV
         const tier1 = [];

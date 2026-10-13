@@ -36,7 +36,8 @@ export async function runStashStage(c: StashStageCtx): Promise<number> {
   const stop = () => c.signal.aborted || c.done();
   /** One guarded query: budgeted, memoised, never throws except for auth/config errors. */
   async function q(label: string, key: string, fn: () => Promise<NormScene[]>): Promise<NormScene[]> {
-    if (stop() || queries >= c.budget || memo.has(key)) return [];
+    // A fingerprint lookup is one exact request and the most reliable signal, so it never competes for the search budget.
+    if (stop() || (label !== 'hash' && queries >= c.budget) || memo.has(key)) return [];
     memo.add(key); queries++;
     c.note(`stashdb ${label}`);
     try {
@@ -107,7 +108,8 @@ export async function runStashStage(c: StashStageCtx): Promise<number> {
   const w1: Promise<any>[] = [];
   const fpKnown = c.fingerprints;
   if (!c.manual && (fpKnown.oshash || fpKnown.md5 || fpKnown.phash)) w1.push(q('hash', `fp:${JSON.stringify(fpKnown)}`, () => stash.byFingerprints(fpKnown, opts)));
-  for (const t of textQueries.slice(0, 3)) w1.push(q('title', `t:${norm(t)}`, () => stash.searchScenes(t, 15, opts)));
+  // Bulk runs keep one free-text guess so the precise studio/performer lookups (and wave 2) get the rest of the small budget.
+  for (const t of textQueries.slice(0, c.manual ? 3 : 1)) w1.push(q('title', `t:${norm(t)}`, () => stash.searchScenes(t, 15, opts)));
   const studiosP = Promise.all(studioCandidates.map((h) => resolveStudio(h)));
   const perfsP = resolvePerformers();
   const [, studios0, perfs] = await Promise.all([Promise.all(w1), studiosP, perfsP]);

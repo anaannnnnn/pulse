@@ -12,7 +12,7 @@ export default function Favorites() {
   return (
     <main className="page">
       <header className="topbar">
-        <h1 className="h1">{list === 'watchlist' ? 'Watchlist' : 'Favorites'}</h1>
+        <h1 className="h1">My List</h1>
       </header>
       <Segmented label="List" value={list} onChange={(v) => setSp({ list: v }, { replace: true })} options={[{ value: 'favorites', label: 'Favorites' }, { value: 'watchlist', label: 'Watchlist' }]} />
       <div className="mt-24">

@@ -26,10 +26,10 @@ export function Segmented<V extends string>({ value, options, onChange, label }:
     setBox({ x: el.offsetLeft, w: el.offsetWidth });
   }, [value, options.length]);
   return (
-    <div className="segmented" role="tablist" aria-label={label} ref={ref}>
+    <div className="segmented" role="radiogroup" aria-label={label} ref={ref}>
       <span className="seg-indicator" style={{ transform: `translateX(${box.x}px)`, width: box.w || undefined, opacity: box.w ? 1 : 0 }} />
       {options.map((o) => (
-        <button key={o.value} role="tab" aria-selected={value === o.value} className={cx(value === o.value && 'on')} onClick={() => onChange(o.value)}>
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} className={cx(value === o.value && 'on')} onClick={() => onChange(o.value)}>
           {o.label}
         </button>
       ))}

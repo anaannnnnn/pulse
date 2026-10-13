@@ -12,8 +12,8 @@ export function TabBar() {
   const items = [
     { to: '/', label: 'Home', icon: Home, active: loc.pathname === '/' },
     { to: '/library', label: 'Library', icon: LayoutGrid, active: lib },
-    { to: '/library?tab=performers', label: 'Stars', icon: Users, active: stars },
-    { to: '/favorites', label: 'Favorites', icon: Heart, active: loc.pathname.startsWith('/favorites'), desktopOnly: true },
+    { to: '/library?tab=performers', label: 'Stars', icon: Users, active: stars, desktopOnly: true },
+    { to: '/favorites', label: 'My List', icon: Heart, active: loc.pathname.startsWith('/favorites') },
     { to: '/torbox', label: 'TorBox', icon: Download, active: loc.pathname.startsWith('/torbox') },
     { to: '/settings', label: 'Settings', icon: Settings, active: loc.pathname.startsWith('/settings') },
   ];
@@ -32,18 +32,18 @@ export function TabBar() {
   return (
     <div className="tabbar">
       <div className="brand">
-        <img src="/favicon.svg" width={28} height={28} alt="" /> Pulse
+        <span className="brand-mark" aria-hidden /> Pulse
       </div>
       <nav aria-label="Main" ref={navRef}>
         {pill && (
           <span
             className="tab-indicator"
-            style={{ transform: `translate(${pill.x + 4}px, ${pill.y + 6}px)`, width: Math.max(0, pill.w - 8), height: Math.max(0, pill.h - 12) }}
+            style={{ transform: `translate(${pill.x}px, ${pill.y}px)`, width: pill.w, height: pill.h }}
           />
         )}
         {items.map(({ to, label, icon: I, active, desktopOnly }) => (
           <NavLink key={label} to={to} className={() => `${active ? 'active' : ''} ${desktopOnly ? 'desktop-only' : ''}`} aria-current={active ? 'page' : undefined}>
-            <I size={22} strokeWidth={active ? 2.2 : 1.8} />
+            <I size={22} strokeWidth={active ? 2.3 : 1.8} aria-hidden />
             <span>{label}</span>
           </NavLink>
         ))}

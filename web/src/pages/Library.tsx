@@ -7,7 +7,6 @@ import { SceneCard, PersonCard, RowItem } from '../components/Cards';
 import { CardSkeletons, Chip, EmptyState, ErrorState, SearchField, Segmented, RowSkeletons, Confidence } from '../components/ui';
 import { FilterSheet, activeCount, toQuery, type Filters, SORTS } from '../components/FilterSheet';
 import { MatchSheet } from '../components/MatchSheet';
-import { Cover } from '../components/Art';
 import { strategyLabel } from '../lib/format';
 import { useDebounced } from '../lib/useDebounced';
 import { useToast } from '../components/Toast';
@@ -80,7 +79,7 @@ function ScenesTab({ q, filters }: { q: string; filters: Filters }) {
     );
   return (
     <>
-      <p className="caption" style={{ margin: '0 2px 12px' }}>
+      <p className="overline" style={{ margin: '0 2px 14px' }}>
         {total} {total === 1 ? 'video' : 'videos'}
       </p>
       <div className="grid">
@@ -173,13 +172,13 @@ function ReviewTab() {
   return (
     <>
       <div className="panel stack gap-12">
-        <div className="row gap-12">
-          <span className="ic" style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'var(--violet-soft)', color: '#c3b1ff' }}>
+        <div className="row gap-12 wrap">
+          <span className="ic violet" style={{ width: 44, height: 44, borderRadius: 14 }}>
             <Wand2 size={18} />
           </span>
           <div className="grow">
-            <div className="h4" style={{ fontSize: 16 }}>{s?.running ? (s.paused ? 'Matching paused' : 'Matching…') : 'ThePornDB matching'}</div>
-            <div className="caption clamp-1">
+            <div className="h4" style={{ fontSize: 16 }}>{s?.running ? (s.paused ? 'Matching paused' : 'Matching…') : 'Metadata matching'}</div>
+            <div className="caption">
               {s?.running ? s.current || 'Working' : `${s?.counts.matched || 0} matched · ${(s?.counts.unmatched || 0) + (s?.counts.pending || 0)} need review`}
             </div>
           </div>
@@ -232,17 +231,20 @@ function ReviewTab() {
               key={it.id}
               item={it}
               onClick={() => setMatching(it)}
-              right={
+              sub={it.path ? it.path.split('/').slice(0, -1).join('/') || '/' : it.name}
+              below={
                 it.matchStatus === 'pending' ? (
                   <span className="badge">Queued</span>
+                ) : it.matchError ? (
+                  <span className="badge warn" title={it.matchError}>Error · {it.matchError.slice(0, 40)}</span>
                 ) : (
-                  <span className="row gap-8">
-                    {it.matchError ? <span className="badge warn" title={it.matchError} aria-label={`Error: ${it.matchError}`}>Error</span> : <Confidence value={it.matchConfidence} />}
-                    <span className="btn btn-secondary btn-sm" aria-label={`Search matches for ${it.name}`}>
-                      <Search size={14} /> Search
-                    </span>
-                  </span>
+                  <Confidence value={it.matchConfidence} />
                 )
+              }
+              right={
+                <span className="icon-btn" aria-hidden>
+                  <Search size={18} />
+                </span>
               }
             />
           ))}
@@ -285,12 +287,9 @@ export default function Library() {
   return (
     <main className="page">
       <header className="topbar">
-        <span className="avatar" aria-hidden>
-          <Cover src="/favicon.svg" alt="" seed="pulse" />
-        </span>
-        <h1 className="h1 clamp-1">Your library</h1>
-        <button className="icon-btn" aria-label="Add pCloud folders" onClick={() => nav('/settings/pcloud')}>
-          <Plus size={22} />
+        <h1 className="h1 clamp-1 grow">Library</h1>
+        <button className="btn btn-secondary btn-sm" onClick={() => nav('/settings/pcloud')}>
+          <Plus size={16} /> Folders
         </button>
       </header>
       <Segmented

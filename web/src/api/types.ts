@@ -265,5 +265,5 @@ export interface Prefs {
   blurThumbs: boolean;
   theme: 'dark' | 'light';
 }
-export interface SessionInfo { paired: boolean; lockEnabled: boolean; locked: boolean; lockTimeoutMin: number }
+export interface SessionInfo { paired: boolean; lockEnabled: boolean; locked: boolean; lockTimeoutMin: number; /** digits in the PIN while locked (4-8), null when unknown */ pinLength?: number | null }
 export interface Device { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }

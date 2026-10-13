@@ -50,6 +50,7 @@ function ScrollTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+    document.documentElement.removeAttribute('data-nav-hidden');
   }, [pathname]);
   return null;
 }
@@ -61,14 +62,20 @@ function Shell() {
     document.body.classList.toggle('blur', prefs.blurThumbs);
   }, [prefs.blurThumbs]);
   useEffect(() => {
-    const spot = (e: PointerEvent) => {
-      const t = (e.target as Element | null)?.closest?.('.card, .person, .cw-card, .group') as HTMLElement | null;
-      if (!t) return;
-      const r = t.getBoundingClientRect();
-      t.style.setProperty('--mx', `${e.clientX - r.left}px`);
-      t.style.setProperty('--my', `${e.clientY - r.top}px`);
+    let lastY = window.scrollY;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY;
+        const root = document.documentElement;
+        root.toggleAttribute('data-scrolled', y > 8);
+        // Netflix-style dock: hide while reading down, return on any upward scroll or near the top.
+        if (Math.abs(y - lastY) > 6) root.toggleAttribute('data-nav-hidden', y > lastY && y > 240);
+        lastY = y;
+      });
     };
-    const onScroll = () => document.documentElement.toggleAttribute('data-scrolled', window.scrollY > 8);
     let startY = 0;
     let tracking = false;
     const onStart = (e: TouchEvent) => {
@@ -89,16 +96,13 @@ function Shell() {
       document.documentElement.style.setProperty('--pull', '0px');
       if (pull > 52) window.dispatchEvent(new Event('pulse-refresh'));
     };
-    window.addEventListener('pointermove', spot, { passive: true });
-    window.addEventListener('pointerdown', spot, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('touchstart', onStart, { passive: true });
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('touchend', onEnd);
     onScroll();
     return () => {
-      window.removeEventListener('pointermove', spot);
-      window.removeEventListener('pointerdown', spot);
+      cancelAnimationFrame(raf);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('touchstart', onStart);
       window.removeEventListener('touchmove', onMove);
@@ -168,8 +172,9 @@ function Gatekeeper() {
 
   if (s.isLoading)
     return (
-      <main className="gate">
-        <img className="logo" src="/icons/icon-192.png" alt="Pulse" />
+      <main className="gate" aria-busy="true">
+        <div className="aurora" aria-hidden><i /><i /><i /></div>
+        <span className="brand-mark" role="img" aria-label="Pulse" />
         <div className="spinner" />
       </main>
     );
@@ -177,7 +182,7 @@ function Gatekeeper() {
     return (
       <main className="gate">
         <div className="aurora" aria-hidden><i /><i /><i /></div>
-        <img className="logo" src="/icons/icon-192.png" alt="" />
+        <span className="brand-mark" aria-hidden />
         <ErrorState error={new Error(`Can’t reach your Pulse server. ${(s.error as Error).message}`)} onRetry={() => s.refetch()} />
         {!isMock && <a className="link-btn" href="/?mock=1">Explore with demo data instead</a>}
       </main>
@@ -185,6 +190,7 @@ function Gatekeeper() {
   if (s.data?.locked)
     return (
       <LockScreen
+        pinLength={s.data.pinLength}
         onUnlocked={async () => {
           // Verify the server really accepts the new session before leaving the lock screen; never silently bounce back.
           const fresh = await client.fetchQuery({ queryKey: ['session'], queryFn: api.session, staleTime: 0 });

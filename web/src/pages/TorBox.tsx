@@ -137,7 +137,7 @@ function Download_({ t }: { t: TorboxItem }) {
           </span>
         </div>
         {playable.length > 0 && t.ready && (
-          <button className="icon-btn" style={{ background: 'var(--brand)', borderColor: 'transparent', color: '#16140f' }} aria-label={`Play ${t.name}`} onClick={() => player.play(torboxSource(t, playable[0]))}>
+          <button className="icon-btn" style={{ background: 'var(--cta)', borderColor: 'transparent', color: 'var(--cta-text)' }} aria-label={`Play ${t.name}`} onClick={() => player.play(torboxSource(t, playable[0]))}>
             <Play size={18} fill="currentColor" />
           </button>
         )}
@@ -192,7 +192,7 @@ function Download_({ t }: { t: TorboxItem }) {
           actions={
             <>
               <button className="btn btn-ghost" onClick={() => setConfirm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { setConfirm(false); ctl.mutate('delete'); }}>Remove</button>
+              <button className="btn btn-danger" onClick={() => { setConfirm(false); ctl.mutate('delete'); }}><Trash2 size={16} /> Remove</button>
             </>
           }
         >

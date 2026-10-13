@@ -27,8 +27,9 @@ export function MetadataSources() {
           <span className="lbl">StashDB</span>
           <span className="val">{src.isLoading ? 'Checking…' : !stash?.configured ? 'API key missing on server (STASHDB_API_KEY)' : stash.enabled ? 'Key set · second metadata source' : 'Key set · switched off'}</span>
         </span>
-        <button className="btn btn-secondary btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>{test.isPending ? 'Testing…' : 'Test StashDB'}</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>{test.isPending ? 'Testing…' : 'Test'}</button>
         <span className={`dot ${state === 'off' ? '' : state}`} aria-hidden />
+        <span className="sr-only">{state === 'ok' ? 'Working' : state === 'warn' ? 'Switched off' : state === 'err' ? 'Not configured' : 'Checking'}</span>
       </div>
       {test.data && (
         <div className="cell" role="status" aria-live="polite">

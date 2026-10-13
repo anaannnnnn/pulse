@@ -24,7 +24,7 @@ export function PrefsProvider({ children, enabled }: { children: ReactNode; enab
   useEffect(() => {
     localStorage.setItem('pulse:prefs', JSON.stringify(prefs));
     document.documentElement.dataset.theme = prefs.theme;
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', prefs.theme === 'light' ? '#F6F5FA' : '#0A0912');
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', prefs.theme === 'light' ? '#f5f5f8' : '#07080d');
   }, [JSON.stringify(prefs)]);
   return <Ctx.Provider value={{ prefs, update: (p) => m.mutate(p) }}>{children}</Ctx.Provider>;
 }

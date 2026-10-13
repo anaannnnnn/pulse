@@ -42,9 +42,9 @@ export function registerAuth(app: FastifyInstance, o: AuthOptions) {
     if (envPin) {
       if (!PIN_RE.test(envPin)) throw new Error('APP_PIN must be 4-8 digits');
       const efp = crypto.createHash('sha256').update('env:' + envPin).digest('hex');
-      if (kv.get('auth.envFp', '') !== efp) { kv.set('pin', hashPin(envPin)); kv.set('auth.envFp', efp); }
+      if (kv.get('auth.envFp', '') !== efp) { kv.set('pin', hashPin(envPin)); kv.set('auth.envFp', efp); kv.set('pinLen', envPin.length); }
     }
-    if (!kv.get<string | null>('pin', null)) kv.set('pin', hashPin(DEFAULT_PIN));
+    if (!kv.get<string | null>('pin', null)) { kv.set('pin', hashPin(DEFAULT_PIN)); kv.set('pinLen', DEFAULT_PIN.length); }
   };
   seed();
   let key = kv.get<string | null>('auth.key', null);
@@ -161,7 +161,12 @@ export function registerAuth(app: FastifyInstance, o: AuthOptions) {
   const checkPin = (req: FastifyRequest, reply: FastifyReply, pin: unknown) => {
     const ip = clientIp(req);
     checkLimit(ip, reply);
-    if (typeof pin === 'string' && PIN_RE.test(pin) && verifyPin(pin, storedPin())) { attempts.delete(ip); return; }
+    if (typeof pin === 'string' && PIN_RE.test(pin) && verifyPin(pin, storedPin())) {
+      attempts.delete(ip);
+      // Remember only the length (never the digits) so the lock screen can submit as soon as the last digit is typed.
+      if (kv.get<number | null>('pinLen', null) !== pin.length) kv.set('pinLen', pin.length);
+      return;
+    }
     recordFail(ip);
     const a = attempts.get(ip)!;
     if (a.lockedUntil > Date.now()) throw tooMany(reply, Math.ceil((a.lockedUntil - Date.now()) / 1000));
@@ -196,9 +201,14 @@ export function registerAuth(app: FastifyInstance, o: AuthOptions) {
     checkPin(req, reply, currentPin);
     if (!PIN_RE.test(String(pin ?? ''))) throw err(400, 'bad_request', 'PIN must be 4-8 digits');
     kv.set('pin', hashPin(String(pin)));
+    kv.set('pinLen', String(pin).length);
     const token = issue(req, reply); // new fingerprint: all other sessions are signed out
     return { pinEnabled: true, token };
   });
 
-  return { isLocked: (req: FastifyRequest, reply: FastifyReply) => !unlocked(req, reply) };
+  return {
+    isLocked: (req: FastifyRequest, reply: FastifyReply) => !unlocked(req, reply),
+    /** Number of digits in the current PIN (4-8), or null if unknown (set before this was tracked). */
+    pinLength: (): number | null => { const n = kv.get<number | null>('pinLen', null); return typeof n === 'number' && n >= 4 && n <= 8 ? n : null; },
+  };
 }

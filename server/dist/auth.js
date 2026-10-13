@@ -29,10 +29,13 @@ export function registerAuth(app, o) {
             if (kv.get('auth.envFp', '') !== efp) {
                 kv.set('pin', hashPin(envPin));
                 kv.set('auth.envFp', efp);
+                kv.set('pinLen', envPin.length);
             }
         }
-        if (!kv.get('pin', null))
+        if (!kv.get('pin', null)) {
             kv.set('pin', hashPin(DEFAULT_PIN));
+            kv.set('pinLen', DEFAULT_PIN.length);
+        }
     };
     seed();
     let key = kv.get('auth.key', null);
@@ -183,6 +186,9 @@ export function registerAuth(app, o) {
         checkLimit(ip, reply);
         if (typeof pin === 'string' && PIN_RE.test(pin) && verifyPin(pin, storedPin())) {
             attempts.delete(ip);
+            // Remember only the length (never the digits) so the lock screen can submit as soon as the last digit is typed.
+            if (kv.get('pinLen', null) !== pin.length)
+                kv.set('pinLen', pin.length);
             return;
         }
         recordFail(ip);
@@ -222,8 +228,13 @@ export function registerAuth(app, o) {
         if (!PIN_RE.test(String(pin ?? '')))
             throw err(400, 'bad_request', 'PIN must be 4-8 digits');
         kv.set('pin', hashPin(String(pin)));
+        kv.set('pinLen', String(pin).length);
         const token = issue(req, reply); // new fingerprint: all other sessions are signed out
         return { pinEnabled: true, token };
     });
-    return { isLocked: (req, reply) => !unlocked(req, reply) };
+    return {
+        isLocked: (req, reply) => !unlocked(req, reply),
+        /** Number of digits in the current PIN (4-8), or null if unknown (set before this was tracked). */
+        pinLength: () => { const n = kv.get('pinLen', null); return typeof n === 'number' && n >= 4 && n <= 8 ? n : null; },
+    };
 }

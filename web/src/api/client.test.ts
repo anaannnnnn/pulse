@@ -41,7 +41,7 @@ describe('req errors', () => {
   });
   it('maps /session to SessionInfo', async () => {
     vi.stubGlobal('fetch', vi.fn(async (u: string) => (u.endsWith('/session') ? res(200, { locked: false, pinEnabled: true }) : res(200, { autoLockMinutes: 5, pinEnabled: true }))));
-    expect(await httpApi.session()).toEqual({ paired: true, lockEnabled: true, locked: false, lockTimeoutMin: 5 });
+    expect(await httpApi.session()).toEqual({ paired: true, lockEnabled: true, locked: false, lockTimeoutMin: 5, pinLength: null });
   });
 });
 

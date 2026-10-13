@@ -18,6 +18,7 @@ let folders: T.Folder[] = [
 ];
 const mockSources = { tpdb: true, stashdb: true };
 const wait = <X>(v: X, ms = 220) => new Promise<X>((r) => setTimeout(() => r(structuredClone(v)), ms));
+const mockLock = { locked: new URLSearchParams(location.search).has('lock'), tries: 5 };
 
 function filter(q: T.ItemQuery) {
   let r = items.slice();
@@ -77,10 +78,11 @@ const find = (id: string) => {
 };
 
 export const mockApi: Api = {
-  session: () => wait({ paired: true, lockEnabled: false, locked: false, lockTimeoutMin: 0 }),
+  // Preview the lock screen with ?mock=1&lock=1 (passcode 1234).
+  session: () => wait({ paired: true, lockEnabled: true, locked: mockLock.locked, lockTimeoutMin: 0, pinLength: 4 }),
   pair: () => wait({ ok: true as const }),
-  unlock: () => wait({ ok: true as const }),
-  lock: () => wait({ ok: true as const }),
+  unlock: (pin: string) => (pin === '1234' ? wait(null).then(() => { mockLock.locked = false; return { ok: true as const }; }) : wait(null, 350).then(() => { throw new Error(`Incorrect PIN. ${--mockLock.tries} ${mockLock.tries === 1 ? 'try' : 'tries'} left.`); })),
+  lock: () => wait(null).then(() => { mockLock.locked = true; return { ok: true as const }; }),
   logout: () => wait({ ok: true as const }),
   setLock: (b) => wait({ lockEnabled: !!b.pin, lockTimeoutMin: b.timeoutMin || 0 }),
   devices: () => wait([{ id: 'a1b2c3d4', label: navigator.userAgent, createdAt: Date.now() - 86400e3, lastSeen: Date.now(), current: true }]),

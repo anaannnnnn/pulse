@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Play, Info, Search, CloudCog, ChevronRight } from 'lucide-react';
+import { Play, Info, Search, CloudCog, ChevronRight, Settings2 } from 'lucide-react';
 import { api, isMock, type Item } from '../api';
 import { SceneCard, ContinueCard, PersonCard } from '../components/Cards';
 import { SearchOverlay } from '../components/SearchOverlay';
@@ -24,17 +24,20 @@ const FEATURE_MS = 7000;
 function Hero({ items }: { items: Item[] }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [hover, setHover] = useState(false);
   const [epoch, setEpoch] = useState(0);
+  const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const held = paused || hover || reduce;
   const player = usePlayer();
   const nav = useNavigate();
   const { prefs } = usePrefs();
   const origin = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
-    if (items.length < 2 || paused) return;
+    if (items.length < 2 || held) return;
     setEpoch((e) => e + 1);
     const t = setInterval(() => setI((x) => (x + 1) % items.length), FEATURE_MS);
     return () => clearInterval(t);
-  }, [items.length, paused]);
+  }, [items.length, held]);
   const it = items[i];
   if (!it) return null;
   const step = (dir: number) => setI((x) => (x + dir + items.length) % items.length);
@@ -44,6 +47,14 @@ function Hero({ items }: { items: Item[] }) {
       style={{ ['--feat-ms' as string]: `${FEATURE_MS}ms` }}
       aria-roledescription="carousel"
       aria-label="Featured"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setHover(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowRight') step(1);
+        if (e.key === 'ArrowLeft') step(-1);
+      }}
       onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest('button')) return;
         setPaused(true);
@@ -79,7 +90,7 @@ function Hero({ items }: { items: Item[] }) {
               role="tab"
               aria-selected={n === i}
               aria-label={`Show featured ${n + 1} of ${items.length}`}
-              className={cx(n < i && 'done', n === i && 'on', n === i && paused && 'held')}
+              className={cx(n < i && 'done', n === i && 'on', n === i && held && 'held')}
               onClick={() => {
                 setI(n);
                 setPaused(true);
@@ -154,12 +165,15 @@ export default function Home() {
         <button className="icon-btn" aria-label="Search library" onClick={() => setSearch(true)}>
           <Search size={20} />
         </button>
+        <Link className="icon-btn" aria-label="Settings" to="/settings">
+          <Settings2 size={20} />
+        </Link>
       </header>
       {search && <SearchOverlay onClose={() => setSearch(false)} />}
 
       {q.isLoading && (
         <>
-          <Skeleton h={440} r={32} />
+          <Skeleton h={520} r={28} style={{ marginTop: 64 }} />
           <div className="section">
             <CardSkeletons rail n={4} />
           </div>

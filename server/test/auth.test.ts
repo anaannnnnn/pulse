@@ -19,7 +19,7 @@ describe('PIN lock', () => {
   it('health, session status and unlock are open; everything else is locked from the first request', async () => {
     expect((await app.inject({ url: '/api/health' })).statusCode).toBe(200);
     const s = await app.inject({ url: '/api/session' });
-    expect(s.json()).toEqual({ locked: true, pinEnabled: true }); // no data leaked while locked
+    expect(s.json()).toEqual({ locked: true, pinEnabled: true, pinLength: 4 }); // only the digit count, no data leaked while locked
     for (const [method, url] of [
       ['GET', '/api/library'], ['GET', '/api/home'], ['GET', '/api/settings'], ['PUT', '/api/settings'], ['GET', '/api/pcloud/status'],
       ['GET', '/api/pcloud/callback?code=x'], ['GET', '/api/scenes/1/stream'], ['GET', '/api/scenes/1/proxy'], ['GET', '/api/scenes/1/thumb'],
@@ -109,6 +109,7 @@ describe('PIN lock', () => {
     expect((await app2.inject({ url: '/api/library', cookies: ck(c2) })).statusCode).toBe(423);
     expect((await unlock(app2, '6442')).statusCode).toBe(401);
     expect((await unlock(app2, '135790', { 'cf-connecting-ip': '192.0.2.1' })).statusCode).toBe(200);
+    expect((await app2.inject({ url: '/api/session' })).json()).toMatchObject({ locked: true, pinLength: 6 });
     const stored = new KV(db).get<string>('pin', '');
     expect(stored).toMatch(/^s1:/);
     expect(stored).not.toContain('135790');
@@ -122,8 +123,10 @@ describe('PIN lock', () => {
     const { hashPin } = await import('../src/crypto.js');
     kv.set('pin', hashPin('2468'));
     const keep = await mk(db);
+    expect((await keep.inject({ url: '/api/session' })).json().pinLength).toBeNull(); // unknown until the first correct unlock
     expect((await unlock(keep, '6442', { 'cf-connecting-ip': '192.0.2.10' })).statusCode).toBe(401);
     expect((await unlock(keep, '2468')).statusCode).toBe(200);
+    expect((await keep.inject({ url: '/api/session' })).json().pinLength).toBe(4);
     const env = await mk(db, { appPin: '777777' });
     expect((await unlock(env, '777777')).statusCode).toBe(200);
     expect((await unlock(env, '2468', { 'cf-connecting-ip': '192.0.2.11' })).statusCode).toBe(401);

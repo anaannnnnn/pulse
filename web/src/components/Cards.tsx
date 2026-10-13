@@ -93,16 +93,16 @@ export function PersonCard({ p, count }: { p: PerformerRef; count?: number }) {
     <Link to={`/performer/${p.id}`} className={cx('person', prefs.blurThumbs && 'blur')}>
       <span className="ph">
         {p.image ? <Cover src={p.image} alt="" seed={p.id} className="blurable" /> : <span className="avatar" style={{ width: '100%', height: '100%', fontSize: 22 }}>{initials(p.name)}</span>}
-        <span className="cast-meta">
-          <span className="nm clamp-2">{p.name}</span>
-          {count != null && <span className="ct">{count} {count === 1 ? 'scene' : 'scenes'}</span>}
-        </span>
+      </span>
+      <span className="cast-meta">
+        <span className="nm clamp-2">{p.name}</span>
+        {count != null && <span className="ct">{count} {count === 1 ? 'scene' : 'scenes'}</span>}
       </span>
     </Link>
   );
 }
 
-export function RowItem({ item, onClick, right, active }: { item: Item; onClick?: () => void; right?: React.ReactNode; active?: boolean }) {
+export function RowItem({ item, onClick, right, active, below, sub }: { item: Item; onClick?: () => void; right?: React.ReactNode; active?: boolean; below?: React.ReactNode; sub?: React.ReactNode }) {
   const nav = useNavigate();
   const { prefs } = usePrefs();
   return (
@@ -112,7 +112,8 @@ export function RowItem({ item, onClick, right, active }: { item: Item; onClick?
       </span>
       <span className="grow stack" style={{ minWidth: 0 }}>
         <span className="t clamp-1">{item.title}</span>
-        <span className="s clamp-1">{item.scene ? itemSub(item) : item.path || item.name}</span>
+        <span className="s clamp-1">{sub ?? (item.scene ? itemSub(item) : item.path || item.name)}</span>
+        {below && <span className="below">{below}</span>}
       </span>
       {right ?? <span className="r">{fmtDuration(item.duration) || ''}</span>}
     </button>

@@ -10,7 +10,12 @@ import { MetadataSources, PATH_LABEL } from '../components/MetadataSources';
 import { fmtRelative } from '../lib/format';
 
 function Dot({ s }: { s: 'ok' | 'warn' | 'err' | 'off' }) {
-  return <span className={`dot ${s === 'off' ? '' : s}`} aria-hidden />;
+  return (
+    <>
+      <span className={`dot ${s === 'off' ? '' : s}`} aria-hidden />
+      <span className="sr-only">{s === 'ok' ? 'Connected' : s === 'warn' ? 'Needs attention' : s === 'err' ? 'Problem' : 'Checking'}</span>
+    </>
+  );
 }
 
 function PinSheet({ timeout, onClose }: { timeout: number; onClose: () => void }) {
@@ -163,6 +168,11 @@ export default function Settings() {
           </span>
           <ChevronRight size={18} className="chev" />
         </Link>
+        <Link to="/favorites" className="cell">
+          <span className="ic"><Heart size={18} /></span>
+          <span className="grow lbl">My List · favorites{caps.watchlist ? ' & watchlist' : ''}</span>
+          <ChevronRight size={18} className="chev" />
+        </Link>
         <Link to="/library?tab=review" className="cell">
           <span className="ic"><Wand2 size={18} /></span>
           <span className="grow stack">
@@ -260,11 +270,6 @@ export default function Settings() {
             <Segmented label="Theme" value={prefs.theme} onChange={(v) => update({ theme: v })} options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
           </div>
         </div>
-        <Link to="/favorites" className="cell">
-          <span className="ic"><Heart size={18} /></span>
-          <span className="grow lbl">Favorites{caps.watchlist ? ' & watchlist' : ''}</span>
-          <ChevronRight size={18} className="chev" />
-        </Link>
       </div>
 
       <h2 className="overline group-title">Data</h2>
@@ -288,10 +293,10 @@ export default function Settings() {
             </button>
           </>
         )}
-        <button className="cell" onClick={() => setConfirm('library')}>
-          <span className="ic brand"><Trash2 size={18} /></span>
+        <button className="cell danger" onClick={() => setConfirm('library')}>
+          <span className="ic danger"><Trash2 size={18} /></span>
           <span className="grow stack">
-            <span className="lbl" style={{ color: 'var(--danger)' }}>Remove library & disconnect pCloud</span>
+            <span className="lbl">Remove library & disconnect pCloud</span>
             <span className="val">Files in pCloud are never touched</span>
           </span>
         </button>
@@ -302,7 +307,7 @@ export default function Settings() {
         <div className="cell">
           <span className="ic"><Info size={18} /></span>
           <span className="grow stack">
-            <span className="lbl">Pulse 1.0</span>
+            <span className="lbl">Pulse 2.0 · Aurora</span>
             <span className="val">{isMock ? 'Demo data mode (open with ?mock=0 to use the server)' : 'Connected to your Pulse server'}</span>
           </span>
         </div>
@@ -318,7 +323,7 @@ export default function Settings() {
             <>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
               <button
-                className="btn btn-primary"
+                className={confirm === 'cache' ? 'btn btn-primary' : 'btn btn-danger'}
                 onClick={() => {
                   clear.mutate(confirm);
                   setConfirm(null);

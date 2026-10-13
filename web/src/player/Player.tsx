@@ -1,34 +1,30 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Pause, Play, RotateCcw, RotateCw, Maximize, Minimize, PictureInPicture2, Gauge, Settings2, Captions, X, Volume2, VolumeX, SkipForward, AlertTriangle } from 'lucide-react';
 import { api, type StreamInfo, type StreamVariant } from '../api';
 import { usePlayer, type PlaySource } from './PlayerContext';
 import { usePrefs } from '../lib/prefs';
-import { cx, fmtTime, hash } from '../lib/format';
+import { cx, fmtTime } from '../lib/format';
 import { useToast } from '../components/Toast';
 
 const NATIVE_OK = ['mp4', 'm4v', 'mov', 'webm'];
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-const BARS = 72;
 const nativeHls = () => typeof document !== 'undefined' && !!document.createElement('video').canPlayType('application/vnd.apple.mpegurl');
 
-/** Waveform scrubber (Pulse "waveform" signature component) with buffered + played states. */
-function Scrubber({ time, duration, buffered, onSeek, seed }: { time: number; duration: number; buffered: number; onSeek: (t: number) => void; seed: string }) {
+/** Timeline scrubber: buffered + played ranges, a draggable head and a time tooltip. Keyboard: ←/→ 5 s, Home/End. */
+function Scrubber({ time, duration, buffered, onSeek }: { time: number; duration: number; buffered: number; onSeek: (t: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
-  const bars = useMemo(() => {
-    const h = hash(seed);
-    return Array.from({ length: BARS }, (_, i) => 22 + Math.abs(Math.sin(i * 0.55 + (h % 97)) * 48 + Math.sin(i * 1.7 + (h % 13)) * 26));
-  }, [seed]);
   const pctAt = (clientX: number) => {
     const r = ref.current!.getBoundingClientRect();
     return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
   };
   const shown = drag ?? (duration ? time / duration : 0);
+  const tipAt = drag ?? hover;
   return (
     <div
       ref={ref}
-      className="scrub"
+      className={cx('scrub', drag != null && 'dragging')}
       role="slider"
       tabIndex={0}
       aria-label="Seek"
@@ -42,29 +38,30 @@ function Scrubber({ time, duration, buffered, onSeek, seed }: { time: number; du
       }}
       onPointerMove={(e) => {
         const p = pctAt(e.clientX);
-        setHover(p);
+        if (e.pointerType === 'mouse') setHover(p);
         if (drag != null) setDrag(p);
       }}
       onPointerUp={(e) => {
         if (drag != null) onSeek(pctAt(e.clientX) * duration);
         setDrag(null);
       }}
+      onPointerCancel={() => setDrag(null)}
       onPointerLeave={() => setHover(null)}
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight') onSeek(Math.min(duration, time + 5));
         if (e.key === 'ArrowLeft') onSeek(Math.max(0, time - 5));
+        if (e.key === 'Home') onSeek(0);
+        if (e.key === 'End') onSeek(Math.max(0, duration - 1));
       }}
     >
-      <div className="wave">
-        {bars.map((b, i) => {
-          const p = i / BARS;
-          return <i key={i} className={cx(p <= shown ? 'done' : p <= buffered && 'buf')} style={{ height: `${b}%` }} />;
-        })}
+      <div className="track">
+        <i className="buf" style={{ width: `${Math.max(shown, buffered) * 100}%` }} />
+        <i className="played" style={{ width: `${shown * 100}%` }} />
       </div>
       <div className="head" style={{ left: `${shown * 100}%` }} />
-      {(hover != null || drag != null) && duration > 0 && (
-        <div className="tip" style={{ left: `${(drag ?? hover!) * 100}%` }}>
-          {fmtTime((drag ?? hover!) * duration)}
+      {tipAt != null && duration > 0 && (
+        <div className="tip" style={{ left: `${Math.min(96, Math.max(4, tipAt * 100))}%` }}>
+          {fmtTime(tipAt * duration)}
         </div>
       )}
     </div>
@@ -289,7 +286,7 @@ export function Player() {
   return (
     <div
       ref={rootRef}
-      className={cx('player', idle && 'idle')}
+      className={cx('player', idle && 'idle', loading && !error && 'is-loading')}
       style={pl.expanded ? undefined : { visibility: 'hidden', pointerEvents: 'none', opacity: 0 }}
       onPointerMove={poke}
       role="dialog"
@@ -419,12 +416,10 @@ export function Player() {
 
         <div className="pbottom" onClick={(e) => e.stopPropagation()}>
           <div className="stack gap-4">
-            <div className="h3 clamp-2" style={{ fontSize: 20 }}>
-              {s.title}
-            </div>
-            {s.subtitle && <div className="body-s clamp-1" style={{ color: 'var(--text-accent)' }}>{s.subtitle}</div>}
+            <div className="h3 clamp-2">{s.title}</div>
+            {s.subtitle && <div className="body-s clamp-1" style={{ color: 'rgba(255,255,255,0.7)' }}>{s.subtitle}</div>}
           </div>
-          <Scrubber time={pl.time} duration={pl.duration} buffered={buffered} onSeek={seek} seed={s.key} />
+          <Scrubber time={pl.time} duration={pl.duration} buffered={buffered} onSeek={seek} />
           <div className="times">
             <span>{fmtTime(pl.time)}</span>
             <span>-{fmtTime(Math.max(0, pl.duration - pl.time))}</span>

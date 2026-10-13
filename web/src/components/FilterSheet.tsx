@@ -72,8 +72,8 @@ export function FilterSheet({ value, onApply, onClose, q }: { value: Filters; on
               value={f.order || (f.sort === 'title' ? 'asc' : 'desc')}
               onChange={(o) => setF({ ...f, order: o })}
               options={[
-                { value: 'desc', label: f.sort === 'title' ? 'Z → A' : 'Newest / longest first' },
-                { value: 'asc', label: f.sort === 'title' ? 'A → Z' : 'Oldest / shortest first' },
+                { value: 'desc', label: f.sort === 'title' ? 'Z → A' : f.sort === 'duration' ? 'Longest first' : 'Newest first' },
+                { value: 'asc', label: f.sort === 'title' ? 'A → Z' : f.sort === 'duration' ? 'Shortest first' : 'Oldest first' },
               ]}
             />
           )}

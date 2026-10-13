@@ -159,7 +159,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
   app.get('/api/health', async () => ({ ok: true, version: cfg.version, time: new Date().toISOString(), uptimeS: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576),
     loop: { p99Ms: Math.round(perf.loop.percentile(99) / 1e6), maxMs: Math.round(perf.loop.max / 1e6) }, requests: perf.total, slowRequests: perf.slow, lastSlow: perf.lastSlow, cache: cache.info(), reads: { hits: reads.hits, misses: reads.misses } }));
   app.get('/api/session', async (req: FastifyRequest, reply: FastifyReply) => {
-    if (auth.isLocked(req, reply)) return { locked: true, pinEnabled: true };
+    if (auth.isLocked(req, reply)) return { locked: true, pinEnabled: true, pinLength: auth.pinLength() };
     const t = pcloudToken(); const info = kv.get<any>('pcloud.info', {});
     return { locked: false, pinEnabled: true,
       pcloud: { connected: !!t, email: t ? info.email ?? null : null, region: t ? regionFromHost(t.host) : null },

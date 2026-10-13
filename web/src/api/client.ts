@@ -251,11 +251,14 @@ export const capabilities: T.Capabilities = { watchlist: false, studioFavorites:
 export const httpApi = {
   /* session & lock */
   session: async (): Promise<T.SessionInfo> => {
-    const s = await req<{ locked: boolean; pinEnabled: boolean }>('GET', '/session');
+    // Both requests in parallel: one round trip on start instead of two (settings simply 423s while locked).
+    const [s, settings] = await Promise.all([
+      req<{ locked: boolean; pinEnabled: boolean; pinLength?: number | null }>('GET', '/session'),
+      req<WSettings>('GET', '/settings').catch(() => null),
+    ]);
     if (s.locked) setToken(null);
-    let timeout = 0;
-    if (!s.locked) timeout = (await req<WSettings>('GET', '/settings').catch(() => null))?.autoLockMinutes ?? 0;
-    return { paired: true, lockEnabled: s.pinEnabled, locked: s.locked, lockTimeoutMin: timeout };
+    const timeout = s.locked ? 0 : settings?.autoLockMinutes ?? 0;
+    return { paired: true, lockEnabled: s.pinEnabled, locked: s.locked, lockTimeoutMin: timeout, pinLength: s.pinLength ?? null };
   },
   pair: (_code: string) => Promise.resolve({ ok: true as const }),
   unlock: (pin: string) => req<{ locked: false; token?: string }>('POST', '/session/unlock', { pin }).then((r) => { setToken(r.token ?? null); return { ok: true as const }; }),

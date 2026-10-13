@@ -173,7 +173,7 @@ export async function buildApp(opts = {}) {
         loop: { p99Ms: Math.round(perf.loop.percentile(99) / 1e6), maxMs: Math.round(perf.loop.max / 1e6) }, requests: perf.total, slowRequests: perf.slow, lastSlow: perf.lastSlow, cache: cache.info(), reads: { hits: reads.hits, misses: reads.misses } }));
     app.get('/api/session', async (req, reply) => {
         if (auth.isLocked(req, reply))
-            return { locked: true, pinEnabled: true };
+            return { locked: true, pinEnabled: true, pinLength: auth.pinLength() };
         const t = pcloudToken();
         const info = kv.get('pcloud.info', {});
         return { locked: false, pinEnabled: true,

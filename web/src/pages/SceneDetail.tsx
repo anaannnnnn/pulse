@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Heart, Bookmark, Play, Wand2, ExternalLink, Subtitles } from 'lucide-react';
+import { ArrowLeft, Heart, Bookmark, Play, Wand2, ExternalLink, Subtitles, Download } from 'lucide-react';
 import { api } from '../api';
 import { Cover } from '../components/Art';
 import { PersonCard, SceneCard } from '../components/Cards';
@@ -112,6 +112,9 @@ export default function SceneDetail() {
           <button className={cx('icon-btn', it.watchlist && 'on')} aria-pressed={it.watchlist} aria-label="Watchlist" onClick={() => fav.mutate({ kind: 'item', refId: it.id, list: 'watchlist', on: !it.watchlist })}>
             <Bookmark size={20} fill={it.watchlist ? 'currentColor' : 'none'} />
           </button>
+          <a className="icon-btn" href={api.itemDownloadUrl(it.id)} download aria-label="Download file">
+            <Download size={20} />
+          </a>
         </div>
         {pct > 0 && !it.progress?.completed && (
           <div className="progress-line" aria-label={`${Math.round(pct)}% watched`}>

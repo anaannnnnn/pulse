@@ -2,14 +2,15 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import type { Subtitle, TorboxKind } from '../api';
 
 export interface PlaySource {
-  key: string; // progress key: pc_<fileId> | tb:<kind>:<id>:<fileId>
+  key: string; // progress key: pc_<fileId> | tb:<kind>:<id>:<fileId>[:<zip entry>]
   kind: 'pcloud' | 'torbox';
   title: string;
   subtitle?: string;
   poster?: string | null;
   fileId?: number;
   ext?: string;
-  tb?: { kind: TorboxKind; id: number; fileId: number };
+  /** `entry` = a file inside a zip (fileId is then the zip's id) */
+  tb?: { kind: TorboxKind; id: number; fileId: number; entry?: string };
   subtitles?: Subtitle[];
   itemId?: string;
   duration?: number | null;

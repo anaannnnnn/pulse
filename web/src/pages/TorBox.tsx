@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Play, Trash2, ChevronDown, ChevronUp, Magnet, Link2, FileUp, Zap, Pause, PlayCircle, CloudUpload, Settings as Gear, Download } from 'lucide-react';
-import { api, caps, type TorboxItem, type TorboxKind } from '../api';
+import { Plus, Play, Trash2, ChevronDown, ChevronUp, Magnet, Link2, FileUp, Zap, Pause, PlayCircle, CloudUpload, Settings as Gear, Download, Archive, X } from 'lucide-react';
+import { api, caps, type TorboxFile, type TorboxItem, type TorboxKind, type TorboxTransfer } from '../api';
 import { EmptyState, ErrorState, Modal, RowSkeletons, Segmented, Sheet } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { ZipBrowser } from '../components/ZipBrowser';
+import { PcloudFolderPicker } from '../components/PcloudFolderPicker';
 import { usePlayer } from '../player/PlayerContext';
 import { torboxSource } from '../lib/play';
 import { fmtBytes, fmtTime } from '../lib/format';
@@ -77,40 +79,69 @@ function AddSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function FolderSave({ item, fileId, onClose }: { item: TorboxItem; fileId: number; onClose: () => void }) {
+const isZip = (f: TorboxFile) => /\.zip$/i.test(f.path || f.name);
+
+/** Whole file, copied by pCloud straight from TorBox (nothing passes through this device). */
+function FolderSave({ item, file, onClose }: { item: TorboxItem; file: TorboxFile; onClose: () => void }) {
   const toast = useToast();
-  const st = useQuery({ queryKey: ['pcloud-status'], queryFn: api.pcloudStatus });
   const save = useMutation({
-    mutationFn: (folderId: number) => api.torboxSaveToPcloud({ kind: item.kind, id: item.id, fileId, folderId }),
-    onSuccess: () => {
-      toast('pCloud is fetching the file. It appears after your next scan.', 'success');
+    mutationFn: (folderId: number) => api.torboxSaveToPcloud({ kind: item.kind, id: item.id, fileId: file.id, folderId, name: file.name }),
+    onSuccess: (r) => {
+      toast(r.message, 'success');
       onClose();
     },
     onError: (e) => toast((e as Error).message, 'error'),
   });
+  return <PcloudFolderPicker title="Save to pCloud" confirmLabel="Save here" busy={save.isPending} onPick={(f) => save.mutate(f.folderId)} onClose={onClose} />;
+}
+
+/** Copies that run through the server (single files out of a zip): progress, cancel, clear. */
+function Transfers() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({ queryKey: ['torbox', 'transfers'], queryFn: api.torboxTransfers, refetchInterval: (s) => (s.state.data?.active ? 2000 : 15000) });
+  const items: TorboxTransfer[] = q.data?.items ?? [];
+  const refresh = () => qc.invalidateQueries({ queryKey: ['torbox', 'transfers'] });
+  const cancel = useMutation({ mutationFn: (id: string) => api.torboxCancelTransfer(id), onSuccess: refresh, onError: (e) => toast((e as Error).message, 'error') });
+  const clear = useMutation({ mutationFn: () => api.torboxClearTransfers(), onSuccess: refresh });
+  if (!items.length) return null;
+  const live = items.filter((t) => t.state === 'queued' || t.state === 'running');
+  const done = items.filter((t) => t.state === 'done').length;
   return (
-    <Sheet title="Save to pCloud" onClose={onClose}>
-      {!st.data?.connected ? (
-        <EmptyState title="pCloud isn’t connected" action={<Link to="/settings/pcloud" className="btn btn-primary">Connect pCloud</Link>} />
-      ) : (
-        <div className="group">
-          {st.data.folders.map((f) => (
-            <button key={f.folderId} className="cell" onClick={() => save.mutate(f.folderId)} disabled={save.isPending}>
-              <span className="ic cyan"><CloudUpload size={18} /></span>
-              <span className="grow stack"><span className="lbl">{f.name}</span><span className="val">{f.path}</span></span>
-            </button>
-          ))}
-          {!st.data.folders.length && <p className="caption" style={{ padding: 16 }}>Add a library folder in pCloud settings first.</p>}
-        </div>
-      )}
-    </Sheet>
+    <section className="tb-item mt-16" aria-label="Copies to pCloud">
+      <div className="row gap-8">
+        <CloudUpload size={16} />
+        <span className="grow" style={{ fontWeight: 600, fontSize: 14 }}>Copying to pCloud</span>
+        <span className="caption">{live.length ? `${live.length} active` : `${done} done`}</span>
+        {!live.length && <button className="btn btn-ghost btn-sm" onClick={() => clear.mutate()}>Clear</button>}
+      </div>
+      <div className="stack">
+        {items.slice(0, 30).map((t) => {
+          const pct = t.size ? Math.min(100, Math.round((t.bytes / t.size) * 100)) : 0;
+          return (
+            <div key={t.id} className="stack gap-4" style={{ padding: '8px 0', borderTop: '1px solid var(--border-subtle)' }}>
+              <div className="row gap-8">
+                <span className="grow clamp-1 body-s">{t.name}</span>
+                <span className="caption">{t.state === 'running' ? `${pct}%` : t.state === 'error' ? 'Failed' : t.state === 'done' ? 'Done' : t.state === 'canceled' ? 'Canceled' : 'Waiting'}</span>
+                {(t.state === 'queued' || t.state === 'running') && (
+                  <button className="icon-btn sm" aria-label={`Cancel ${t.name}`} onClick={() => cancel.mutate(t.id)}><X size={14} /></button>
+                )}
+              </div>
+              {t.state === 'running' && <div className="progress-line"><i style={{ width: `${pct}%` }} /></div>}
+              {t.state === 'error' && <span className="hint">{t.error}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
 function Download_({ t }: { t: TorboxItem }) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const [saving, setSaving] = useState<number | null>(null);
+  const [saving, setSaving] = useState<TorboxFile | null>(null);
+  const [zip, setZip] = useState<TorboxFile | null>(null);
   const player = usePlayer();
   const toast = useToast();
   const qc = useQueryClient();
@@ -123,6 +154,7 @@ function Download_({ t }: { t: TorboxItem }) {
     onError: (e) => toast((e as Error).message, 'error'),
   });
   const playable = t.files.filter((f) => f.playable).sort((a, b) => b.size - a.size);
+  const zips = t.files.filter(isZip);
   const downloading = !t.ready && t.progress < 1;
   return (
     <div className="tb-item">
@@ -134,8 +166,14 @@ function Download_({ t }: { t: TorboxItem }) {
             {t.ready ? <span className="badge ok">Ready</span> : <span className="badge warn">{t.state}</span>}
             <span>{fmtBytes(t.size)}</span>
             {playable.length > 0 && <span>{playable.length} video{playable.length > 1 ? 's' : ''}</span>}
+            {zips.length > 0 && <span>{zips.length} zip{zips.length > 1 ? 's' : ''}</span>}
           </span>
         </div>
+        {playable.length === 0 && zips.length > 0 && t.ready && (
+          <button className="icon-btn" style={{ background: 'var(--cta)', borderColor: 'transparent', color: 'var(--cta-text)' }} aria-label={zips.length === 1 ? `Browse ${zips[0].name}` : 'Show zip files'} onClick={() => (zips.length === 1 ? setZip(zips[0]) : setOpen(true))}>
+            <Archive size={18} />
+          </button>
+        )}
         {playable.length > 0 && t.ready && (
           <button className="icon-btn" style={{ background: 'var(--cta)', borderColor: 'transparent', color: 'var(--cta-text)' }} aria-label={`Play ${t.name}`} onClick={() => player.play(torboxSource(t, playable[0]))}>
             <Play size={18} fill="currentColor" />
@@ -174,11 +212,14 @@ function Download_({ t }: { t: TorboxItem }) {
                 <span className="clamp-1 body-s">{f.name}</span>
                 <span className="mono faint" style={{ fontSize: 11 }}>{fmtBytes(f.size)}</span>
               </span>
+              {isZip(f) && t.ready && (
+                <button className="icon-btn sm" aria-label={`Browse ${f.name}`} onClick={() => setZip(f)}><Archive size={14} /></button>
+              )}
               {f.playable && t.ready && (
                 <button className="icon-btn sm" aria-label={`Play ${f.name}`} onClick={() => player.play(torboxSource(t, f))}><Play size={14} /></button>
               )}
-              {caps.saveToPcloud && f.playable && t.ready && (
-                <button className="icon-btn sm" aria-label={`Save ${f.name} to pCloud`} onClick={() => setSaving(f.id)}><CloudUpload size={14} /></button>
+              {caps.saveToPcloud && (f.playable || isZip(f)) && t.ready && (
+                <button className="icon-btn sm" aria-label={`Save ${f.name} to pCloud`} onClick={() => setSaving(f)}><CloudUpload size={14} /></button>
               )}
             </div>
           ))}
@@ -199,7 +240,8 @@ function Download_({ t }: { t: TorboxItem }) {
           “{t.name}” will be deleted from your TorBox account.
         </Modal>
       )}
-      {saving != null && <FolderSave item={t} fileId={saving} onClose={() => setSaving(null)} />}
+      {saving && <FolderSave item={t} file={saving} onClose={() => setSaving(null)} />}
+      {zip && <ZipBrowser item={t} file={zip} onClose={() => setZip(null)} />}
     </div>
   );
 }
@@ -243,6 +285,7 @@ export default function TorBox() {
             <span className="grow" />
             {list.isFetching && <span className="eq" aria-label="Refreshing"><i /><i /><i /></span>}
           </div>
+          <Transfers />
           <div className="stack gap-12 mt-16">
             {list.isLoading && <RowSkeletons />}
             {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} />}

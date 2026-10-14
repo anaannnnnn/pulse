@@ -241,6 +241,11 @@ export interface TorboxItem {
   expiresAt: string | null;
   files: TorboxFile[];
 }
+/** One file inside a zip that lives in TorBox (read in place, never extracted). */
+export interface ZipEntryInfo { name: string; shortName: string; dir: string; size: number; isVideo: boolean; playable: boolean; seekable: boolean; encrypted: boolean }
+export interface ZipListing { total: number; videos: number; truncated: boolean; archiveSize: number; entries: ZipEntryInfo[] }
+export interface TorboxTransfer { id: string; batch: string; name: string; folderId: number; size: number; bytes: number; state: 'queued' | 'running' | 'done' | 'error' | 'canceled'; error: string | null; attempts: number; createdAt: number; finishedAt: number | null }
+export interface TorboxSaveResult { ok: boolean; mode: 'direct' | 'stream'; message: string; queued?: number; missing?: string[] }
 export interface TorboxStatus {
   linked: boolean;
   source: 'user' | 'env' | null;

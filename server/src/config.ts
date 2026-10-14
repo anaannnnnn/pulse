@@ -55,6 +55,8 @@ export const config = {
   stashdbUrl: (process.env.STASHDB_URL || 'https://stashdb.org/graphql').trim(),
   stashdbIntervalMs: Number(process.env.STASHDB_INTERVAL_MS ?? 150),
   torboxKey: cleanSecret(process.env.TORBOX_API_KEY),
+  /** How many TorBox → pCloud copies that run through this server may go at once (zip entries are streamed, never stored). */
+  torboxTransferConcurrency: Math.max(1, Number(process.env.TORBOX_TRANSFER_CONCURRENCY || 2)),
   appPin: cleanSecret(process.env.APP_PIN),
   secret: process.env.PULSE_SECRET || process.env.APP_SECRET || '',
   version: '1.0.0',

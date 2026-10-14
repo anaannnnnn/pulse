@@ -18,7 +18,8 @@ import { Library } from './services/library.js';
 import { Matcher } from './services/matcher.js';
 import { Scanner, ScanFolder } from './services/scanner.js';
 import { parseFilename, isVideo, srtToVtt } from './parser.js';
-import { listZipVideos, openZipEntry } from './zipList.js';
+import { readZipIndex, openZipEntry, ZipIndexCache, ZipError, isJunkEntry, isVideoEntry, isStreamable, mimeOf, contentDisposition, type ZipEntry, type ZipIndex } from './zipList.js';
+import { TransferQueue } from './services/torboxTransfers.js';
 import { oshashFromUrl } from './hash.js';
 import { CacheStore } from './cacheStore.js';
 import { PcloudCacheCloud } from './services/pcloudCache.js';
@@ -352,6 +353,51 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
     void req;
     return url;
   };
+  // ---------- TorBox zip archives: browse, play, download and copy single files without extracting anything ----------
+  const zipIndexes = new ZipIndexCache();
+  const zipUrls = new Map<string, { url: string; at: number }>();
+  const zipKey = (t: TorboxType, id: number, fileId: number) => `${t}:${id}:${fileId}`;
+  /** TorBox CDN link for the archive file (cached for a while; `fresh` asks TorBox for a new one). */
+  const zipUrl = async (t: TorboxType, id: number, fileId: number, fresh = false) => {
+    const k = zipKey(t, id, fileId);
+    const c = zipUrls.get(k);
+    if (!fresh && c && Date.now() - c.at < 20 * 60000) return c.url;
+    const url = await torbox().requestDownload(t, id, fileId);
+    zipUrls.set(k, { url, at: Date.now() });
+    return url;
+  };
+  const zipIndex = async (t: TorboxType, id: number, fileId: number, fresh = false): Promise<ZipIndex> => {
+    const k = zipKey(t, id, fileId);
+    if (fresh) { zipUrls.delete(k); zipIndexes.invalidate(k); }
+    return zipIndexes.get(k, async () => readZipIndex(await zipUrl(t, id, fileId, fresh), f));
+  };
+  /** An expired or revoked CDN link: worth one retry with a fresh link. */
+  const staleLink = (e: unknown) => e instanceof ZipError && (e.status === 403 || e.status === 404 || e.status === 410);
+  /** Archive problems become clean API errors instead of leaking the CDN's status code. */
+  const zipErr = (e: unknown) => (e instanceof ZipError ? err(e.status === 422 || e.status === 413 ? e.status : 502, 'archive_error', e.message) : e);
+  const withZip = async <T,>(t: TorboxType, id: number, fileId: number, fn: (idx: ZipIndex, url: string) => Promise<T>): Promise<T> => {
+    try {
+      return await fn(await zipIndex(t, id, fileId), await zipUrl(t, id, fileId));
+    } catch (e) {
+      if (!staleLink(e)) throw zipErr(e);
+      try { return await fn(await zipIndex(t, id, fileId, true), await zipUrl(t, id, fileId)); } catch (e2) { throw zipErr(e2); }
+    }
+  };
+  const serveZipEntry = async (t: TorboxType, id: number, fileId: number, entryName: string, req: any, reply: FastifyReply, download: boolean) => {
+    const ac = new AbortController();
+    req.raw.on('close', () => ac.abort());
+    const opened = await withZip(t, id, fileId, async (idx, url) => {
+      const entry = idx.byName.get(entryName);
+      if (!entry) throw err(404, 'not_found', 'That file is not in the archive');
+      return openZipEntry(url, f, entry, { range: req.headers.range, download, signal: ac.signal });
+    });
+    reply.status(opened.status);
+    for (const [h, v] of Object.entries(opened.headers)) reply.header(h, v);
+    req.raw.on('close', () => opened.body.destroy());
+    return reply.send(opened.body);
+  };
+  const zipTransfers = new TransferQueue({ concurrency: cfg.torboxTransferConcurrency });
+
   app.get('/api/scenes/:id/stream', async (req: any) => {
     const id = sceneId(req); const row = needScene(id);
     const subs = (db.prepare('SELECT id, name, lang, format FROM subtitles WHERE scene_id=?').all(id) as any[]).map((s) => ({ label: s.lang ? s.lang.toUpperCase() : s.name, lang: s.lang, url: `/api/scenes/${id}/subtitles/${s.id}`, format: 'vtt' }));
@@ -384,15 +430,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
     const row = needScene(sceneId(req));
     if (row.source === 'torbox' && String(row.path || '').includes('#')) {
       const inner = String(row.path).slice(String(row.path).indexOf('#') + 1);
-      const url = await sourceUrl(row, req, true);
-      const entries = await listZipVideos(url, f);
-      const entry = entries.find((e) => e.name === inner);
-      if (!entry) throw err(404, 'not_found', 'That video is not in the archive');
-      const opened = await openZipEntry(url, f, entry, req.headers.range);
-      reply.status(opened.status);
-      for (const [h, v] of Object.entries(opened.headers)) reply.header(h, v);
-      req.raw.on('close', () => opened.body.destroy());
-      return reply.send(opened.body);
+      return serveZipEntry(row.torbox_type, row.torbox_id, row.torbox_file_id, inner, req, reply, !!req.query?.download);
     }
     const fetchUpstream = async (fresh: boolean) => f(await sourceUrl(row, req, fresh), { headers: req.headers.range ? { Range: req.headers.range } : {} });
     let up = await fetchUpstream(false);
@@ -402,6 +440,7 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
     for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag']) { const v = up.headers.get(h); if (v) reply.header(h, v); }
     if (!up.headers.get('accept-ranges')) reply.header('accept-ranges', 'bytes');
     reply.header('cache-control', 'private, no-store');
+    if (req.query?.download) reply.header('content-disposition', contentDisposition(row.file_name, 'attachment'));
     const stream = Readable.fromWeb(up.body as any);
     req.raw.on('close', () => stream.destroy());
     return reply.send(stream);
@@ -597,12 +636,76 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
     await torbox().control(tbType(req.params.type), Number(req.params.id), op);
     return { ok: true, operation: op };
   });
+  const safeName = (n: string) => String(n).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(0, 180) || 'file';
+  /**
+   * TorBox → pCloud, no local download.
+   *  - whole file (or a normal torrent file): pCloud pulls it straight from TorBox ("direct", this server only brokers the link)
+   *  - individual files inside a zip: `entries` is a list of names or "videos"; each one is streamed out of the archive through
+   *    this server into pCloud ("stream", no disk, a few at a time, progress at /api/torbox/transfers)
+   */
   app.post('/api/torbox/save-to-pcloud', async (req: any) => {
-    const { type, id, fileId, folderId } = req.body || {};
-    if (!id || folderId === undefined) throw err(400, 'bad_request', 'type, id, fileId, folderId required');
-    const url = await torbox().requestDownload(tbType(type), Number(id), fileId !== undefined ? Number(fileId) : undefined);
-    await pcloud().downloadToFolder(url, Number(folderId));
-    return { ok: true, message: 'pCloud is downloading the file into the selected folder. Rescan when it finishes.' };
+    const b = req.body || {};
+    if (!b.id || b.folderId === undefined) throw err(400, 'bad_request', 'type, id, fileId, folderId required');
+    const t = tbType(b.type); const id = Number(b.id); const folderId = Number(b.folderId);
+    if (!Number.isInteger(id) || !Number.isInteger(folderId)) throw err(400, 'bad_request', 'id and folderId must be numbers');
+    if (!pcloudToken()) throw err(409, 'pcloud_not_connected', 'Connect pCloud first');
+    const pc = pcloud();
+    if (b.entries !== undefined) {
+      const fileId = Number(b.fileId);
+      if (!Number.isInteger(fileId)) throw err(400, 'bad_request', 'fileId required to copy files from inside an archive');
+      if (b.entries !== 'videos' && (!Array.isArray(b.entries) || !b.entries.length || b.entries.length > 2000)) throw err(400, 'bad_request', 'entries must be "videos" or a list of 1-2000 file names');
+      const idx = await withZip(t, id, fileId, async (i) => i);
+      const wanted: ZipEntry[] = []; const missing: string[] = [];
+      if (b.entries === 'videos') wanted.push(...idx.entries.filter((e) => isVideoEntry(e) && isStreamable(e)));
+      else for (const n of b.entries.map(String)) { const e = idx.byName.get(n); if (!e) missing.push(n); else if (!isStreamable(e)) missing.push(n); else wanted.push(e); }
+      if (!wanted.length) throw err(404, 'not_found', 'None of those files can be copied out of the archive');
+      let target = folderId;
+      if (b.subfolder) target = await pc.ensureFolder(safeName(b.subfolder === true ? 'TorBox' : String(b.subfolder)), folderId);
+      const batch = crypto.randomUUID();
+      const queued = wanted.map((e) => zipTransfers.add({
+        name: e.name.split('/').pop() || e.name, folderId: target, size: e.size, batch,
+        run: async ({ signal, progress }) => {
+          const open = async (fresh: boolean) => openZipEntry(await zipUrl(t, id, fileId, fresh), f, e, { signal });
+          let opened;
+          try { opened = await open(false); } catch (e1) { if (!staleLink(e1)) throw e1; opened = await open(true); }
+          return pc.uploadStream(target, safeName(e.name.split('/').pop() || e.name), opened.body, opened.size, { signal, onProgress: progress });
+        },
+      }));
+      return { ok: true, mode: 'stream', batch, queued: queued.length, transfers: queued.map((q) => q.id), missing, message: `Copying ${queued.length} file${queued.length === 1 ? '' : 's'} from the archive to pCloud. Nothing is saved on this server; progress shows on the TorBox page.` };
+    }
+    const url = await torbox().requestDownload(t, id, b.fileId !== undefined ? Number(b.fileId) : undefined);
+    await pc.downloadToFolder(url, folderId, b.name ? safeName(b.name) : undefined);
+    return { ok: true, mode: 'direct', message: 'pCloud is downloading the file straight from TorBox into the selected folder. Rescan when it finishes.' };
+  });
+  app.get('/api/torbox/transfers', async () => ({ items: zipTransfers.list().slice(0, 300), active: zipTransfers.active }));
+  app.delete('/api/torbox/transfers/:id', async (req: any) => ({ ok: zipTransfers.cancel(String(req.params.id)) }));
+  app.post('/api/torbox/transfers/cancel-all', async () => ({ canceled: zipTransfers.list().filter((x) => (x.state === 'queued' || x.state === 'running') && zipTransfers.cancel(x.id)).length }));
+  app.post('/api/torbox/transfers/clear', async () => ({ cleared: zipTransfers.clearFinished() }));
+
+  // ---- inside a zip: list, play and download individual files ----
+  app.get('/api/torbox/zip/entries', async (req: any) => {
+    const q = req.query || {};
+    const t = tbType(q.type); const id = Number(q.id); const fileId = Number(q.fileId);
+    if (!Number.isInteger(id) || !Number.isInteger(fileId)) throw err(400, 'bad_request', 'type, id and fileId required');
+    const idx = await withZip(t, id, fileId, async (i) => i);
+    const all = q.all === '1' || q.all === 'true';
+    const rows = idx.entries.filter((e) => !isJunkEntry(e.name));
+    const videos = rows.filter((e) => isVideoEntry(e));
+    const shown = (all ? rows : videos).slice().sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true, sensitivity: 'base' }));
+    const cap = 5000;
+    return {
+      total: rows.length, videos: videos.length, truncated: shown.length > cap, archiveSize: idx.length,
+      entries: shown.slice(0, cap).map((e) => ({
+        name: e.name, shortName: e.name.split('/').pop() || e.name, dir: e.name.includes('/') ? e.name.slice(0, e.name.lastIndexOf('/')) : '',
+        size: e.size, isVideo: isVideoEntry(e), playable: isVideoEntry(e) && isStreamable(e), seekable: e.method === 0, encrypted: e.encrypted,
+      })),
+    };
+  });
+  app.get('/api/torbox/zip/stream', async (req: any, reply: FastifyReply) => {
+    const q = req.query || {};
+    const t = tbType(q.type); const id = Number(q.id); const fileId = Number(q.fileId);
+    if (!Number.isInteger(id) || !Number.isInteger(fileId) || !q.entry) throw err(400, 'bad_request', 'type, id, fileId and entry required');
+    return serveZipEntry(t, id, fileId, String(q.entry), req, reply, q.download === '1' || q.download === 'true');
   });
   app.delete('/api/torbox/downloads/:type/:id', async (req: any) => { await torbox().remove(tbType(req.params.type), Number(req.params.id)); return { ok: true }; });
   app.post('/api/torbox/add', async (req: any) => {
@@ -641,49 +744,64 @@ export async function buildApp(opts: AppOptions = {}): Promise<FastifyInstance &
     const url = await torbox().requestDownload(t, Number(id), file ? file.id : fileId !== undefined ? Number(fileId) : undefined, req.ip);
     return { url, mime: file?.mime ?? null, name: file?.shortName ?? it?.name ?? '' };
   });
+  /** Adds the playable videos of one zip as library items that stream straight from the archive. */
+  const importZip = async (t: TorboxType, it: any, file: any, only: Set<string> | null, newIds: number[], tally: { seen: number; added: number }) => {
+    const idx = await withZip(t, it.id, file.id, async (i) => i);
+    const prefix = `torbox:${t}:${it.id}:${file.id}:z:`;
+    for (const entry of idx.entries) {
+      if (!isVideoEntry(entry) || !isStreamable(entry)) continue;
+      if (only && !only.has(entry.name)) continue;
+      tally.seen++;
+      const key = prefix + entry.name;
+      if (db.prepare('SELECT 1 FROM scenes WHERE ext_key=?').get(key)) continue;
+      const base = entry.name.split('/').pop() || entry.name;
+      const dir = '/' + entry.name.split('/').slice(0, -1).join('/');
+      const parsed = parseFilename(base, dir);
+      const r = db.prepare(`INSERT INTO scenes(ext_key, source, torbox_type, torbox_id, torbox_file_id, path, file_name, size, content_type, parsed, added_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(key, 'torbox', t, it.id, file.id, `/TorBox/${file.name}#${entry.name}`, base, entry.size || file.size, mimeOf(base), JSON.stringify(parsed), it.createdAt || new Date().toISOString());
+      newIds.push(Number(r.lastInsertRowid)); tally.added++;
+    }
+  };
   app.post('/api/torbox/import', async (req: any) => {
     const b = req.body || {}; const tb = torbox();
+    const newIds: number[] = []; const tally = { seen: 0, added: 0 };
+    const finish = () => {
+      if ((b.autoMatch ?? settings().library.autoMatch) && anyProvider() && newIds.length) matcher.enqueue(newIds);
+      return { added: tally.added, seen: tally.seen, match: matcher.status };
+    };
+    if (b.zip) {
+      // one archive, optionally only the chosen files from it
+      const t = tbType(b.zip.type);
+      const [it] = await tb.list(t, Number(b.zip.id));
+      const file = it?.files.find((x: any) => String(x.id) === String(b.zip.fileId));
+      if (!file) throw err(404, 'not_found', 'That archive was not found in TorBox');
+      const only = Array.isArray(b.zip.entries) && b.zip.entries.length ? new Set<string>(b.zip.entries.map(String)) : null;
+      await importZip(t, it, file, only, newIds, tally);
+      return finish();
+    }
     const types = b.type ? [tbType(b.type)] : TB_TYPES;
-    let added = 0, seen = 0; const newIds: number[] = [];
     for (const t of types) {
       const items = (await tb.list(t)).filter((i: any) => i.ready && (!b.ids || b.ids.map(Number).includes(i.id)));
       for (const it of items) {
         for (const file of it.files.filter((x: any) => x.isVideo && !/\bsample\b/i.test(x.name))) {
-          seen++;
+          tally.seen++;
           const key = `torbox:${t}:${it.id}:${file.id}`;
           if (db.prepare('SELECT 1 FROM scenes WHERE ext_key=?').get(key)) continue;
           const dir = '/' + String(file.name).split('/').slice(0, -1).join('/');
           const parsed = parseFilename(file.shortName, dir);
           const r = db.prepare(`INSERT INTO scenes(ext_key, source, torbox_type, torbox_id, torbox_file_id, path, file_name, size, content_type, parsed, added_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
             .run(key, 'torbox', t, it.id, file.id, `/TorBox/${file.name}`, file.shortName, file.size, file.mime, JSON.stringify(parsed), it.createdAt || new Date().toISOString());
-          newIds.push(Number(r.lastInsertRowid)); added++;
+          newIds.push(Number(r.lastInsertRowid)); tally.added++;
         }
-        let zips = 0;
-        for (const file of it.files.filter((x: any) => /\.zip$/i.test(x.name || ''))) {
-          if (zips++ >= 8) break;
-          const prefix = `torbox:${t}:${it.id}:${file.id}:z:`;
-          if (db.prepare('SELECT 1 FROM scenes WHERE ext_key LIKE ?').get(prefix + '%')) continue;
-          let entries: { name: string; size: number }[] = [];
-          try {
-            const url = await tb.requestDownload(t, it.id, file.id);
-            entries = await listZipVideos(url, f);
-          } catch { continue; }
-          for (const entry of entries) {
-            seen++;
-            const key = prefix + entry.name;
-            if (db.prepare('SELECT 1 FROM scenes WHERE ext_key=?').get(key)) continue;
-            const base = entry.name.split('/').pop() || entry.name;
-            const dir = '/' + entry.name.split('/').slice(0, -1).join('/');
-            const parsed = parseFilename(base, dir);
-            const r = db.prepare(`INSERT INTO scenes(ext_key, source, torbox_type, torbox_id, torbox_file_id, path, file_name, size, content_type, parsed, added_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
-              .run(key, 'torbox', t, it.id, file.id, `/TorBox/${file.name}#${entry.name}`, base, entry.size || file.size, base.endsWith('.webm') ? 'video/webm' : 'video/mp4', JSON.stringify(parsed), it.createdAt || new Date().toISOString());
-            newIds.push(Number(r.lastInsertRowid)); added++;
-          }
+        for (const file of it.files.filter((x: any) => /\.zip$/i.test(x.name || '')).slice(0, 200)) {
+          // a zip that was fully indexed before (same size) is skipped; its videos are already library items
+          const doneKey = `torbox.zip.${t}.${it.id}.${file.id}`;
+          if (kv.get<number | null>(doneKey, null) === file.size) continue;
+          try { await importZip(t, it, file, null, newIds, tally); kv.set(doneKey, file.size); } catch { /* unreadable archive: try again on the next import */ }
         }
       }
     }
-    if ((b.autoMatch ?? settings().library.autoMatch) && anyProvider() && newIds.length) matcher.enqueue(newIds);
-    return { added, seen, match: matcher.status };
+    return finish();
   });
 
   // ---------- settings ----------

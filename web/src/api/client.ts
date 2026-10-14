@@ -59,6 +59,9 @@ async function req<R>(method: string, path: string, body?: unknown, signal?: Abo
   }
   return data as R;
 }
+/** Same-origin URL that streams (or, with `download`, saves) one file out of a TorBox zip. The server reads it in place with Range requests. */
+const zipUrl = (kind: T.TorboxKind, id: number, fileId: number, entry: string, download = false) =>
+  `/api/torbox/zip/stream${toQuery({ type: kind, id, fileId, entry, download: download ? 1 : undefined })}`;
 const unsupported = (what: string): Promise<any> => Promise.reject(new ApiError(`${what} isn’t supported by this server yet`, 501, 'unsupported'));
 
 export function toQuery(q: Record<string, unknown>) {
@@ -246,7 +249,7 @@ const localProg = (): Record<string, { position: number; duration: number | null
   }
 };
 
-export const capabilities: T.Capabilities = { watchlist: false, studioFavorites: false, devices: false, pause: false, saveToPcloud: false, tokenFlow: false, clearServerData: false };
+export const capabilities: T.Capabilities = { watchlist: false, studioFavorites: false, devices: false, pause: false, saveToPcloud: true, tokenFlow: false, clearServerData: false };
 
 export const httpApi = {
   /* session & lock */
@@ -416,7 +419,10 @@ export const httpApi = {
       .sort((a, b) => b.updatedAt - a.updatedAt),
 
   /* streaming */
-  stream: async (src: { kind: 'pcloud' | 'torbox'; itemId?: string; tb?: { kind: T.TorboxKind; id: number; fileId: number } }): Promise<T.StreamInfo> => {
+  stream: async (src: { kind: 'pcloud' | 'torbox'; itemId?: string; tb?: { kind: T.TorboxKind; id: number; fileId: number; entry?: string } }): Promise<T.StreamInfo> => {
+    if (src.kind === 'torbox' && src.tb?.entry) {
+      return { variants: [{ id: 'original', label: 'From archive', url: authUrl(zipUrl(src.tb.kind, src.tb.id, src.tb.fileId, src.tb.entry)), transcoded: false }], subtitles: [], duration: null };
+    }
     if (src.kind === 'torbox' && src.tb) {
       const r = await req<{ url: string; mime: string | null; name: string }>('GET', `/torbox/stream${toQuery({ type: src.tb.kind, id: src.tb.id, fileId: src.tb.fileId })}`);
       return { variants: [{ id: 'original', label: 'Original', url: r.url, transcoded: false }], subtitles: [], duration: null };
@@ -533,6 +539,8 @@ export const httpApi = {
   },
   setFolders: async (folders: T.Folder[]) =>
     (await req<{ folders: { folderId: number; path: string; name: string }[] }>('PUT', '/pcloud/scan-folders', { folders: folders.map((f) => ({ folderId: f.folderId, name: f.name, path: f.path ?? undefined })) })).folders.map((f): T.Folder => ({ folderId: f.folderId, name: f.name, path: f.path })),
+  /** Saves the original file (for zip-backed items, just that one video) through the server. */
+  itemDownloadUrl: (id: string): string => authUrl(`/api/scenes/${encodeURIComponent(id)}/proxy?download=1`),
   scan: async (_folderIds?: number[]) => mapScan(await req<WScan>('POST', '/pcloud/rescan', { autoMatch: true })),
   scanState: async () => mapScan(await req<WScan>('GET', '/pcloud/scan')),
   variants: (_fileId: number) => unsupported('Variants') as Promise<T.Variants>,
@@ -559,7 +567,17 @@ export const httpApi = {
     const r = await req<{ cached: Record<string, unknown> }>('POST', '/torbox/cached', { hashes });
     return { cached: Object.fromEntries(Object.entries(r.cached).map(([k, v]) => [k, !!v])) };
   },
-  torboxSaveToPcloud: (_b: { kind: T.TorboxKind; id: number; fileId: number; folderId: number }) => unsupported('Save to pCloud'),
+  torboxSaveToPcloud: (b: { kind: T.TorboxKind; id: number; fileId?: number; folderId: number; name?: string; entries?: string[] | 'videos'; subfolder?: string }) =>
+    req<T.TorboxSaveResult>('POST', '/torbox/save-to-pcloud', { type: b.kind, id: b.id, fileId: b.fileId, folderId: b.folderId, name: b.name, entries: b.entries, subfolder: b.subfolder }),
+  /** Files inside a zip, read from its central directory (a few KB over Range requests, no download). */
+  torboxZipEntries: (kind: T.TorboxKind, id: number, fileId: number) => req<T.ZipListing>('GET', `/torbox/zip/entries${toQuery({ type: kind, id, fileId })}`),
+  torboxZipUrl: (kind: T.TorboxKind, id: number, fileId: number, entry: string, download = false): string => authUrl(zipUrl(kind, id, fileId, entry, download)),
+  torboxImportZip: (b: { kind: T.TorboxKind; id: number; fileId: number; entries?: string[] }) =>
+    req<{ added: number; seen: number }>('POST', '/torbox/import', { zip: { type: b.kind, id: b.id, fileId: b.fileId, entries: b.entries } }),
+  torboxTransfers: () => req<{ items: T.TorboxTransfer[]; active: boolean }>('GET', '/torbox/transfers'),
+  torboxCancelTransfer: (id: string) => req<{ ok: boolean }>('DELETE', `/torbox/transfers/${encodeURIComponent(id)}`),
+  torboxCancelAllTransfers: () => req<{ canceled: number }>('POST', '/torbox/transfers/cancel-all', {}),
+  torboxClearTransfers: () => req<{ cleared: number }>('POST', '/torbox/transfers/clear', {}),
 
   /* settings */
   prefs: async () => mapSettings(await req<WSettings>('GET', '/settings')),

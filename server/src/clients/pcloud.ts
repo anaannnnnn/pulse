@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { HttpError, FetchLike } from '../http.js';
 
 export type PcloudRegion = 'us' | 'eu';
@@ -93,8 +95,9 @@ export class PcloudClient {
     const j = await this.call<{ hosts: string[]; path: string }>('gethlslink', { fileid: fileId });
     return `https://${j.hosts[0]}${j.path}`;
   }
-  async downloadToFolder(url: string, folderId: number) {
-    return this.call('downloadfileasync', { url, folderid: folderId });
+  /** pCloud fetches `url` itself (nothing passes through this server). `target` is the file name to save it as. */
+  async downloadToFolder(url: string, folderId: number, target?: string) {
+    return this.call('downloadfileasync', { url, folderid: folderId, target: target ? encodeURIComponent(target) : undefined });
   }
   async thumbLink(fileId: number, size = '640x360', crop = 0) {
     const j = await this.call<{ hosts: string[]; path: string }>('getthumblink', { fileid: fileId, size, crop, type: 'jpg' });
@@ -128,6 +131,47 @@ export class PcloudClient {
     const fd = new FormData();
     fd.append('file', new Blob([new Uint8Array(body)]), filename);
     const res = await this.f(u.toString(), { method: 'POST', body: fd, headers: { Authorization: `Bearer ${this.token.accessToken}` } });
+    if (!res.ok) throw new HttpError(502, `pCloud uploadfile HTTP ${res.status}`);
+    const j: any = await res.json().catch(() => ({}));
+    if (j.result !== 0) throw new HttpError(502, `pCloud uploadfile: ${j.error || j.result}`, 'upstream_error');
+    const id = j.fileids?.[0] ?? j.metadata?.[0]?.fileid;
+    if (id == null) throw new HttpError(502, 'pCloud uploadfile returned no file id', 'upstream_error');
+    return Number(id);
+  }
+
+  /**
+   * Streams `body` (exactly `size` bytes) into a new pCloud file. The multipart framing is added around the stream and the
+   * Content-Length is computed up front, so nothing is buffered or written to disk. A broken upload is not kept (`nopartial`),
+   * and a name clash gets a "(2)" suffix instead of overwriting.
+   */
+  async uploadStream(folderId: number, filename: string, body: AsyncIterable<Uint8Array>, size: number, opts: { signal?: AbortSignal; onProgress?: (bytes: number) => void } = {}): Promise<number> {
+    if (!this.token) throw new HttpError(409, 'pCloud is not connected', 'pcloud_not_connected');
+    if (!/^e?api\.pcloud\.com$/.test(this.token.host)) throw new HttpError(400, 'Invalid pCloud hostname', 'bad_request');
+    const u = new URL(`https://${this.token.host}/uploadfile`);
+    u.searchParams.set('folderid', String(folderId));
+    u.searchParams.set('filename', filename);
+    u.searchParams.set('nopartial', '1');
+    u.searchParams.set('renameifexists', '1');
+    const boundary = `----pulse${crypto.randomBytes(12).toString('hex')}`;
+    const pre = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename.replace(/["\r\n\\]/g, '_')}"\r\nContent-Type: application/octet-stream\r\n\r\n`, 'utf8');
+    const post = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+    let sent = 0;
+    async function* framed() {
+      yield pre;
+      for await (const chunk of body) {
+        sent += chunk.length;
+        if (sent > size) throw new HttpError(502, 'The source produced more data than expected', 'upstream_error');
+        opts.onProgress?.(sent);
+        yield chunk;
+      }
+      if (sent !== size) throw new HttpError(502, `The source ended early (${sent} of ${size} bytes)`, 'upstream_error');
+      yield post;
+    }
+    const stream = Readable.toWeb(Readable.from(framed(), { objectMode: false })) as unknown as BodyInit;
+    const res = await this.f(u.toString(), {
+      method: 'POST', body: stream, signal: opts.signal, duplex: 'half',
+      headers: { Authorization: `Bearer ${this.token.accessToken}`, 'content-type': `multipart/form-data; boundary=${boundary}`, 'content-length': String(pre.length + size + post.length) },
+    } as RequestInit);
     if (!res.ok) throw new HttpError(502, `pCloud uploadfile HTTP ${res.status}`);
     const j: any = await res.json().catch(() => ({}));
     if (j.result !== 0) throw new HttpError(502, `pCloud uploadfile: ${j.error || j.result}`, 'upstream_error');

@@ -28,3 +28,16 @@ export function torboxSource(t: TorboxItem, f: TorboxFile): PlaySource {
     tb: { kind: t.kind, id: t.id, fileId: f.id },
   };
 }
+
+/** A single video inside a TorBox zip (streamed out of the archive, nothing is extracted). */
+export function zipEntrySource(t: TorboxItem, zip: TorboxFile, entry: { name: string; shortName: string }): PlaySource {
+  return {
+    key: `tb:${t.kind}:${t.id}:${zip.id}:${entry.name}`,
+    kind: 'torbox',
+    title: entry.shortName,
+    subtitle: zip.name,
+    poster: null,
+    ext: entry.shortName.split('.').pop()?.toLowerCase(),
+    tb: { kind: t.kind, id: t.id, fileId: zip.id, entry: entry.name },
+  };
+}

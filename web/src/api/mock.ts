@@ -298,7 +298,7 @@ export const mockApi: Api = {
   torboxList: () =>
     wait({
       items: [
-        { key: 'torrents:1', kind: 'torrents' as const, id: 1, name: 'Vixen.26.08.23.Anniversary.Collection.2160p', hash: 'a'.repeat(40), size: 18_400_000_000, progress: 1, state: 'cached', speed: 0, eta: 0, seeds: 120, peers: 4, cached: true, ready: true, createdAt: '2026-10-08T10:00:00Z', expiresAt: null, files: [{ id: 0, name: 'Part 1.mp4', path: 'Vixen/Part 1.mp4', size: 6_100_000_000, mimetype: 'video/mp4', playable: true, subtitle: false }, { id: 1, name: 'Part 2.mp4', path: 'Vixen/Part 2.mp4', size: 6_200_000_000, mimetype: 'video/mp4', playable: true, subtitle: false }] },
+        { key: 'torrents:1', kind: 'torrents' as const, id: 1, name: 'Vixen.26.08.23.Anniversary.Collection.2160p', hash: 'a'.repeat(40), size: 18_400_000_000, progress: 1, state: 'cached', speed: 0, eta: 0, seeds: 120, peers: 4, cached: true, ready: true, createdAt: '2026-10-08T10:00:00Z', expiresAt: null, files: [{ id: 0, name: 'Part 1.mp4', path: 'Vixen/Part 1.mp4', size: 6_100_000_000, mimetype: 'video/mp4', playable: true, subtitle: false }, { id: 1, name: 'Part 2.mp4', path: 'Vixen/Part 2.mp4', size: 6_200_000_000, mimetype: 'video/mp4', playable: true, subtitle: false }, { id: 2, name: 'Full Archive.zip', path: 'Vixen/Full Archive.zip', size: 6_100_000_000, mimetype: 'application/zip', playable: false, subtitle: false }] },
         { key: 'torrents:2', kind: 'torrents' as const, id: 2, name: 'BrazzersExxtra.26.10.05.Best.Of.1080p', hash: 'b'.repeat(40), size: 4_200_000_000, progress: 0.62, state: 'downloading', speed: 18_400_000, eta: 92, seeds: 38, peers: 12, cached: false, ready: false, createdAt: '2026-10-09T09:00:00Z', expiresAt: null, files: [] },
         { key: 'webdl:3', kind: 'webdl' as const, id: 3, name: 'sample-trailer.mp4', hash: null, size: 210_000_000, progress: 1, state: 'completed', speed: 0, eta: 0, seeds: null, peers: null, cached: true, ready: true, createdAt: '2026-10-07T09:00:00Z', expiresAt: null, files: [{ id: 0, name: 'sample-trailer.mp4', path: 'sample-trailer.mp4', size: 210_000_000, mimetype: 'video/mp4', playable: true, subtitle: false }] },
       ],
@@ -306,7 +306,22 @@ export const mockApi: Api = {
   torboxAdd: () => wait({ ok: true }, 500),
   torboxControl: () => wait({ ok: true }),
   torboxCached: (h) => wait({ cached: Object.fromEntries(h.map((x) => [x, true])) }),
-  torboxSaveToPcloud: () => wait({ ok: true }),
+  torboxSaveToPcloud: (b) => wait({ ok: true, mode: b.entries ? ('stream' as const) : ('direct' as const), queued: Array.isArray(b.entries) ? b.entries.length : b.entries ? 24 : undefined, message: 'Demo: nothing was copied.' }),
+  torboxZipEntries: () =>
+    wait({
+      total: 148, videos: 142, truncated: false, archiveSize: 52_000_000_000,
+      entries: Array.from({ length: 142 }, (_, i) => {
+        const n = String(i + 1).padStart(3, '0');
+        return { name: `Collection/Scene ${n}.mp4`, shortName: `Scene ${n}.mp4`, dir: 'Collection', size: 300_000_000 + i * 7_000_000, isVideo: true, playable: true, seekable: i % 5 !== 0, encrypted: false };
+      }),
+    }, 250),
+  torboxZipUrl: () => '/demo/sample.mp4',
+  itemDownloadUrl: () => '/demo/sample.mp4',
+  torboxImportZip: (b) => wait({ added: b.entries?.length ?? 142, seen: b.entries?.length ?? 142 }, 400),
+  torboxTransfers: () => wait({ items: [], active: false }),
+  torboxCancelTransfer: () => wait({ ok: true }),
+  torboxCancelAllTransfers: () => wait({ canceled: 0 }),
+  torboxClearTransfers: () => wait({ cleared: 0 }),
 
   prefs: () => wait(prefs),
   setPrefs: (p) => {

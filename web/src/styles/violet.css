@@ -384,3 +384,99 @@ a.cell:hover, button.cell:hover:not(:disabled) { background: rgba(190, 170, 255,
   .gate-aurora { display: none; }
   body::after { display: none; }
 }
+
+/* ═════════════════════════ LIQUID GLASS ═════════════════════════
+   One recipe, used everywhere: a translucent body that blurs + saturates what is behind it, a bright specular rim
+   (top-left lit, bottom-right shaded), and a soft caustic highlight. Poster artwork is never blurred (cost + clarity). */
+:root {
+  --lg-body: linear-gradient(145deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.06) 42%, rgba(255, 255, 255, 0.1) 100%);
+  --lg-rim: inset 0 1.2px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.12), inset 1.2px 0 0 rgba(255, 255, 255, 0.2), inset -1.2px 0 0 rgba(255, 255, 255, 0.1), inset 0 0 22px rgba(255, 255, 255, 0.06);
+  --lg-drop: 0 18px 40px -14px rgba(5, 2, 20, 0.7), 0 2px 8px rgba(5, 2, 20, 0.35);
+  --lg-blur: blur(22px) saturate(190%) brightness(1.08);
+  --lg-spec: radial-gradient(120% 90% at 18% 0%, rgba(255, 255, 255, 0.28), transparent 55%);
+}
+[data-theme='light'] {
+  --lg-body: linear-gradient(145deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45));
+  --lg-rim: inset 0 1.2px 0 #fff, inset 0 -1px 0 rgba(60, 30, 130, 0.1), inset 0 0 0 1px rgba(60, 30, 130, 0.08);
+  --lg-drop: 0 18px 36px -16px rgba(60, 30, 130, 0.35);
+}
+
+/* colourful, slowly drifting light behind everything so the glass has something to refract */
+#root::before, #root::after { content: ''; position: fixed; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(70px); opacity: 0.55; will-change: transform; }
+#root::before { width: 70vmax; height: 70vmax; left: -25vmax; top: 30vh; background: radial-gradient(circle, rgba(88, 76, 255, 0.55), transparent 65%); animation: lg-drift 26s ease-in-out infinite alternate; }
+#root::after { width: 60vmax; height: 60vmax; right: -25vmax; top: -10vh; background: radial-gradient(circle, rgba(214, 78, 220, 0.4), transparent 65%); animation: lg-drift 32s ease-in-out infinite alternate-reverse; }
+@keyframes lg-drift { to { transform: translate3d(8vmax, -6vmax, 0) scale(1.15); } }
+
+.icon-btn, .chip, .segmented, .search, .search-pill, .badge:not(.new):not(.brand):not(.warn):not(.ok), .cat .cc, .trust, .panel, .group, .feat-grid, .btn-secondary, .keypad button, .player .skip, .toast, .mini, .sheet, .modal, .pull-ind, .stats, .player .menu, .hud, .detail-hero .badge:not(.warn):not(.brand) {
+  background: var(--lg-body);
+  -webkit-backdrop-filter: var(--lg-blur);
+  backdrop-filter: var(--lg-blur);
+  border: 0;
+  box-shadow: var(--lg-rim), var(--lg-drop);
+}
+.chip, .segmented, .search, .badge, .keypad button.flat { box-shadow: var(--lg-rim); }
+.chip.on, .icon-btn.on, .cat.on .cc { background: linear-gradient(145deg, rgba(190, 150, 255, 0.55), rgba(120, 70, 240, 0.45)); box-shadow: var(--lg-rim), 0 10px 28px -8px rgba(139, 92, 246, 0.9); }
+.icon-btn:hover:not(:disabled), .chip:hover, .cat:hover .cc { background: linear-gradient(145deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1)); }
+.panel, .group, .feat-grid, .trust, .sheet, .modal { background: linear-gradient(150deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035) 50%, rgba(255, 255, 255, 0.07)); }
+.sheet { background: linear-gradient(180deg, rgba(60, 44, 100, 0.8), rgba(24, 16, 44, 0.92)); -webkit-backdrop-filter: blur(34px) saturate(190%); backdrop-filter: blur(34px) saturate(190%); }
+.cell, .group .cell { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.segmented .seg-indicator { background: linear-gradient(145deg, rgba(200, 165, 255, 0.7), rgba(120, 70, 240, 0.6)); box-shadow: var(--lg-rim), 0 6px 18px -6px rgba(139, 92, 246, 0.9); }
+.search:focus-within, .search-pill:hover { box-shadow: var(--lg-rim), 0 0 0 3px rgba(139, 92, 246, 0.3); }
+.search-pill { box-shadow: var(--lg-rim), var(--lg-drop); }
+.input, .select, .textarea { background: rgba(10, 6, 22, 0.45); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.12); border: 0; }
+.input:focus, .select:focus, .textarea:focus { box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(139, 92, 246, 0.35); }
+
+/* glass buttons get a travelling sheen on press */
+.icon-btn, .chip, .btn-secondary { position: relative; overflow: hidden; }
+.icon-btn::before, .chip::before, .btn-secondary::before, .search-pill::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--lg-spec); opacity: 0.7; }
+.search-pill { position: relative; overflow: hidden; }
+.btn-primary { box-shadow: 0 14px 30px -10px rgba(139, 92, 246, 0.8), inset 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.2), inset 1px 0 0 rgba(255, 255, 255, 0.2); }
+
+/* banner: glass slab over the artwork */
+.banner { box-shadow: var(--lg-rim), 0 30px 60px -26px rgba(80, 40, 200, 0.75); border: 0; }
+.banner::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--lg-spec); opacity: 0.55; mix-blend-mode: screen; }
+
+/* poster cards: glass label + rim, artwork untouched */
+.card .art, .cw-card .art { box-shadow: var(--lg-rim), 0 22px 38px -18px rgba(0, 0, 0, 0.9); }
+.card .scrim { background: linear-gradient(180deg, transparent, rgba(12, 8, 24, 0.5) 38%, rgba(12, 8, 24, 0.9)); }
+.card .corner .badge, .card .corner-r { background: rgba(255, 255, 255, 0.16); -webkit-backdrop-filter: blur(14px) saturate(180%); backdrop-filter: blur(14px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); border: 0; }
+.play-fab { background: rgba(255, 255, 255, 0.2); -webkit-backdrop-filter: blur(16px) saturate(190%); backdrop-filter: blur(16px) saturate(190%); box-shadow: var(--lg-rim), 0 10px 26px -6px rgba(0, 0, 0, 0.7); color: #fff; }
+.cw-card .ring { background: rgba(255, 255, 255, 0.14); box-shadow: var(--lg-rim); }
+.cat .cc { box-shadow: var(--lg-rim), var(--lg-drop); }
+.cat-card { background: radial-gradient(100% 70% at 50% 0%, color-mix(in srgb, var(--a) 45%, transparent), transparent 70%), linear-gradient(150deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04)); -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%); border: 0; box-shadow: var(--lg-rim), var(--lg-drop); }
+
+/* ───────── the dock ───────── */
+.tabbar nav a .ico { display: grid; place-items: center; will-change: transform; transform-origin: 50% 80%; }
+.tabbar nav a .lb { white-space: nowrap; }
+@media (max-width: 1023px) {
+  .tabbar { left: 14px; right: 14px; }
+  .tabbar nav {
+    max-width: 430px; height: 72px; padding: 6px; border-radius: 999px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.11) 100%), rgba(28, 20, 52, 0.35);
+    -webkit-backdrop-filter: blur(26px) saturate(210%) brightness(1.1); backdrop-filter: blur(26px) saturate(210%) brightness(1.1);
+    border: 0;
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.6), inset 0 -1.5px 0 rgba(255, 255, 255, 0.14), inset 1.5px 0 0 rgba(255, 255, 255, 0.24), inset -1.5px 0 0 rgba(255, 255, 255, 0.12), inset 0 0 30px rgba(255, 255, 255, 0.08), 0 30px 60px -18px rgba(5, 2, 24, 0.85), 0 4px 14px rgba(5, 2, 24, 0.45);
+    overflow: visible;
+  }
+  .tabbar nav::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(90% 120% at 15% -10%, rgba(255, 255, 255, 0.3), transparent 55%), radial-gradient(70% 90% at 100% 120%, rgba(190, 140, 255, 0.28), transparent 60%); mix-blend-mode: screen; }
+  .tabbar nav a { border-radius: 999px; padding-top: 2px; }
+  .tabbar nav a .lb { font-size: 10px; font-weight: 600; margin-top: 1px; transition: opacity 200ms; }
+  .tabbar nav[data-press] a:not(.active) .lb { opacity: 0.55; }
+}
+.tab-indicator {
+  z-index: 0; border-radius: 999px; overflow: hidden;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.1) 55%, rgba(200, 160, 255, 0.28));
+  -webkit-backdrop-filter: blur(8px) saturate(240%) brightness(1.3); backdrop-filter: blur(8px) saturate(240%) brightness(1.3);
+  border: 0;
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85), inset 0 -2px 4px rgba(120, 70, 240, 0.35), inset 1.5px 0 0 rgba(255, 255, 255, 0.4), inset -1.5px 0 0 rgba(255, 255, 255, 0.25), 0 10px 26px -6px rgba(110, 60, 240, 0.8), 0 2px 6px rgba(5, 2, 24, 0.4);
+  transition: box-shadow 300ms, background 300ms;
+}
+.tab-indicator .spec { position: absolute; left: 10%; right: 10%; top: 5%; height: 42%; border-radius: 999px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)); filter: blur(1px); opacity: 0.8; }
+.tabbar nav[data-press] .tab-indicator { background: linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.16) 55%, rgba(210, 170, 255, 0.4)); box-shadow: inset 0 1.5px 0 #fff, inset 0 -3px 6px rgba(120, 70, 240, 0.45), inset 1.5px 0 0 rgba(255, 255, 255, 0.5), inset -1.5px 0 0 rgba(255, 255, 255, 0.3), 0 18px 40px -6px rgba(110, 60, 240, 0.95), 0 2px 8px rgba(5, 2, 24, 0.45); }
+.tabbar nav a.active, .tabbar nav a.hot { color: #fff; }
+.tabbar nav a.hot svg { color: #fff; filter: drop-shadow(0 4px 10px rgba(80, 30, 200, 0.7)); }
+.tabbar nav a.active svg { color: #fff; filter: drop-shadow(0 0 8px rgba(190, 150, 255, 0.9)); }
+.mini { background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06)), rgba(24, 16, 44, 0.45); border-radius: 26px; }
+.dock-fade { background: linear-gradient(180deg, transparent, rgba(8, 5, 18, 0.7)); }
+
+@media (prefers-reduced-motion: reduce) { #root::before, #root::after { animation: none; } }

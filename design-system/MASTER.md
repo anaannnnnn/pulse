@@ -14,7 +14,8 @@ Deep aubergine black, frosted glass surfaces, one violet accent. Tokens and shap
 ## Components
 - Home: greeting, pill search, category circles, glass banner hero (swipe, story dots), stats row, rails, category cards.
 - Cards: 20px radius glass poster cards with tilt + glare. Continue-watching with progress ring. Performers with violet story rings.
-- Dock: frosted capsule with a liquid violet indicator (GSAP squash-and-stretch).
+- Liquid Glass: one recipe (translucent body, blur + saturate, bright specular rim, caustic highlight) on all controls and panels; poster art is never blurred.
+- Dock: liquid-glass capsule. Press and slide to scrub: the glass lens follows the finger, icons swell Mac-dock style, haptic tick per tab, lift to go. Tap works the same. Desktop sidebar uses plain links.
 - Detail: full-bleed art, glass chips, violet Play pill, "At a glance" tiles.
 - Player: violet scrubber, swipe-down to minimise, right edge volume, left edge brightness.
 - Lock screen: violet app icon, glass keypad, three.js aurora.

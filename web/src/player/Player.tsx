@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Pause, Play, RotateCcw, RotateCw, Maximize, Minimize, PictureInPicture2, Gauge, Settings2, Captions, X, Volume2, VolumeX, SkipForward, AlertTriangle } from 'lucide-react';
+import { ChevronDown, Pause, Play, RotateCcw, RotateCw, Maximize, Minimize, PictureInPicture2, Gauge, Settings2, Captions, X, Volume2, VolumeX, SkipForward, AlertTriangle, Sun } from 'lucide-react';
 import { api, type StreamInfo, type StreamVariant } from '../api';
 import { usePlayer, type PlaySource } from './PlayerContext';
 import { usePrefs } from '../lib/prefs';
 import { cx, fmtTime } from '../lib/format';
 import { useToast } from '../components/Toast';
+import { gsap, haptic } from '../motion/gsap';
 
 const NATIVE_OK = ['mp4', 'm4v', 'mov', 'webm'];
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -94,6 +95,11 @@ export function Player() {
   const retried = useRef(0);
   const idleTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef({ t: 0 }).current;
+  // gestures: drag down = minimise (spring), right edge = volume, left edge = brightness
+  const [hud, setHud] = useState<{ k: 'vol' | 'bri'; v: number } | null>(null);
+  const [bri, setBri] = useState(1);
+  const hudT = useRef<number | undefined>(undefined);
+  const g = useRef<{ id: number; mode: 'none' | 'dismiss' | 'vol' | 'bri'; x: number; y: number; base: number; vy: number; ly: number; lt: number } | null>(null);
   const skip = prefs.skipSeconds || 10;
 
   // resolve stream links (fresh, short-lived) + resume point whenever the source changes
@@ -277,6 +283,55 @@ export function Player() {
     navigator.mediaSession.setActionHandler('seekforward', () => jump(skip));
   }, [s?.key]);
 
+  const showHud = (k: 'vol' | 'bri', val: number) => {
+    setHud({ k, v: val });
+    window.clearTimeout(hudT.current);
+    hudT.current = window.setTimeout(() => setHud(null), 900);
+  };
+  const gDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button,.scrub,.menu,input,a')) return;
+    g.current = { id: e.pointerId, mode: 'none', x: e.clientX, y: e.clientY, base: 0, vy: 0, ly: e.clientY, lt: performance.now() };
+  };
+  const gMove = (e: React.PointerEvent) => {
+    const d = g.current, root = rootRef.current;
+    if (!d || d.id !== e.pointerId || !root) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y, w = root.clientWidth, h = root.clientHeight;
+    if (d.mode === 'none') {
+      if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx) * 1.4) return;
+      const fx = d.x / w;
+      if (fx > 0.76) { d.mode = 'vol'; d.base = v.current?.volume ?? 1; }
+      else if (fx < 0.24) { d.mode = 'bri'; d.base = bri; }
+      else if (dy > 0) d.mode = 'dismiss';
+      else return;
+      try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+    const now = performance.now();
+    d.vy = (e.clientY - d.ly) / Math.max(1, now - d.lt);
+    d.ly = e.clientY; d.lt = now;
+    if (d.mode === 'vol') {
+      const val = Math.min(1, Math.max(0, d.base - dy / (h * 0.55)));
+      if (v.current) { v.current.volume = val; v.current.muted = val === 0; }
+      setMuted(val === 0);
+      showHud('vol', val);
+    } else if (d.mode === 'bri') {
+      const val = Math.min(1.4, Math.max(0.25, d.base - dy / (h * 0.55)));
+      setBri(val);
+      showHud('bri', (val - 0.25) / 1.15);
+    } else if (d.mode === 'dismiss') {
+      const p = Math.min(1, Math.max(0, dy) / (h * 0.5));
+      gsap.set(root, { y: Math.max(0, dy) * 0.92, scale: 1 - p * 0.14, borderRadius: p * 36, overflow: 'hidden', transformOrigin: '50% 40%', overwrite: 'auto' });
+    }
+  };
+  const gUp = (e: React.PointerEvent) => {
+    const d = g.current, root = rootRef.current;
+    g.current = null;
+    if (!d || !root || d.mode !== 'dismiss') return;
+    const dy = e.clientY - d.y;
+    if (dy > 150 || d.vy > 0.8) {
+      haptic(10);
+      gsap.to(root, { y: window.innerHeight * 0.55, scale: 0.8, opacity: 0, duration: 0.32, ease: 'power3.in', onComplete: () => { gsap.set(root, { clearProps: 'all' }); pl.minimize(); } });
+    } else gsap.to(root, { y: 0, scale: 1, borderRadius: 0, duration: 0.7, ease: 'elastic.out(1,0.6)', clearProps: 'borderRadius,overflow' });
+  };
   if (!s) return null;
   const next = s.queue?.[0];
   const isTranscoded = !!current?.transcoded;
@@ -288,7 +343,10 @@ export function Player() {
       ref={rootRef}
       className={cx('player', idle && 'idle', loading && !error && 'is-loading')}
       style={pl.expanded ? undefined : { visibility: 'hidden', pointerEvents: 'none', opacity: 0 }}
-      onPointerMove={poke}
+      onPointerMove={(e) => { poke(); gMove(e); }}
+      onPointerDown={gDown}
+      onPointerUp={gUp}
+      onPointerCancel={gUp}
       role="dialog"
       aria-label={`Player: ${s.title}`}
       aria-hidden={!pl.expanded}
@@ -297,6 +355,7 @@ export function Player() {
         ref={v}
         playsInline
         autoPlay
+        style={bri !== 1 ? { filter: `brightness(${bri})` } : undefined}
         preload="metadata"
         poster={s.poster || undefined}
         onLoadedMetadata={(e) => {
@@ -519,6 +578,12 @@ export function Player() {
         </div>
       )}
 
+      {hud && (
+        <div className="hud" key={hud.k} role="status" aria-label={`${hud.k === 'vol' ? 'Volume' : 'Brightness'} ${Math.round(hud.v * 100)}%`}>
+          {hud.k === 'vol' ? hud.v === 0 ? <VolumeX size={18} /> : <Volume2 size={18} /> : <Sun size={18} />}
+          <span className="hud-bar"><i style={{ height: `${hud.v * 100}%` }} /></span>
+        </div>
+      )}
       {flash && <div key={flash.n} className="flash" style={flash.side === 'l' ? { left: '12%' } : { right: '12%' }}>{flash.side === 'l' ? <RotateCcw size={28} /> : <RotateCw size={28} />}</div>}
       {loading && !error && (
         <div className="loading">

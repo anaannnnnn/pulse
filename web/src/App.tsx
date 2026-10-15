@@ -22,6 +22,12 @@ const PcloudSettings = lazy(() => import('./pages/PcloudSettings'));
 const TorboxSettings = lazy(() => import('./pages/TorboxSettings'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 
+// warm the heaviest routes while the browser is idle so navigation (and the poster transition) never waits on a chunk
+if (typeof window !== 'undefined') {
+  const warm = () => { void import('./pages/SceneDetail'); void import('./pages/PerformerDetail'); void import('./pages/Studio'); void import('./pages/Favorites'); };
+  (window.requestIdleCallback || ((f: () => void) => window.setTimeout(f, 1500)))(warm);
+}
+
 const qc = new QueryClient({
   defaultOptions: {
     queries: {

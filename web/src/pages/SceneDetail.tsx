@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Heart, Bookmark, Play, Wand2, ExternalLink, Subtitles } from 'lucide-react';
@@ -12,6 +12,9 @@ import { itemSource } from '../lib/play';
 import { cx, fmtBytes, fmtDate, fmtDuration, fmtTime, providerLabel, strategyLabel } from '../lib/format';
 import { usePrefs } from '../lib/prefs';
 import { useFavorite } from '../lib/useFavorite';
+import { gsap, reduced } from '../motion/gsap';
+import { startPosterIn, endPosterIn } from '../motion/transition';
+import { setAmbient } from '../motion/ambient';
 
 export default function SceneDetail() {
   const { id = '' } = useParams();
@@ -23,6 +26,26 @@ export default function SceneDetail() {
   const [more, setMore] = useState(false);
   const q = useQuery({ queryKey: ['item', id], queryFn: () => api.item(id) });
   const back = () => (history.length > 1 ? nav(-1) : nav('/'));
+  const heroRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    startPosterIn();
+  }, [id]);
+  const loaded = q.data?.item;
+  // poster -> backdrop shared-element entrance, scroll parallax, ambient glow from the artwork
+  useLayoutEffect(() => {
+    const h = heroRef.current;
+    if (!h || !loaded) return;
+    void setAmbient(loaded.scene?.background || loaded.scene?.poster, loaded.id);
+    const played = endPosterIn(h);
+    const ctx = gsap.context(() => {
+      if (reduced()) return;
+      gsap.to('.detail-hero .bg', { yPercent: 14, scale: 1.14, ease: 'none', scrollTrigger: { trigger: h, start: 'top top', end: 'bottom top', scrub: true } });
+      gsap.to('.detail-hero > .stack', { y: -40, opacity: 0.15, ease: 'none', scrollTrigger: { trigger: h, start: '45% top', end: 'bottom top', scrub: true } });
+      if (!played) gsap.from('.detail-hero .bg', { scale: 1.2, duration: 1.4, ease: 'expo.out' });
+      gsap.from('.detail-play > *', { y: 26, opacity: 0, duration: 0.7, stagger: 0.07, ease: 'power4.out', delay: played ? 0.7 : 0.15, clearProps: 'all' });
+    }, h.parentElement!);
+    return () => ctx.revert();
+  }, [loaded?.id]);
 
   if (q.isLoading)
     return (
@@ -53,7 +76,7 @@ export default function SceneDetail() {
 
   return (
     <main className={cx('page no-pad-top', prefs.blurThumbs && 'blur')}>
-      <section className="detail-hero">
+      <section className="detail-hero" ref={heroRef}>
         <div className="bg hero-media">
           <Cover src={sc?.background || sc?.poster} alt="" seed={it.id} eager label={!sc ? it.name : undefined} />
         </div>

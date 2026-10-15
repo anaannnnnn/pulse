@@ -1,35 +1,33 @@
-# Pulse — Nocturne Cinema
+# Pulse · Maison Noir (design system)
 
-Direction: private cinema. Blue-black canvas, ivory type, one ember signal. Editorial serif for titles, Geist for UI.
-Final visual layer: `web/src/styles/nocturne.css` (loaded after app/polish/house, so it wins).
+A luxury-cinema look: warm black, ivory type, champagne gold as the only accent.
 
-## Tokens
+## Type
+- Display: **Bodoni Moda** (titles, numerals, italic accents). Self-hosted in `web/public/fonts`.
+- UI: **Hanken Grotesk**. Labels, counters, timestamps: **DM Mono**, uppercase, wide tracking.
 
-| Token | Value |
-|---|---|
-| canvas | `#06070a` |
-| surface / raised | `#0d0f15` / `#151821` |
-| ivory (text, primary button) | `#f6f2e9` |
-| ember (progress, live, active) | `#ff5a3c` -> `#ff9a4a` |
-| display font | Instrument Serif (400) |
-| UI font | Geist Sans / Geist Mono |
-| radius | 12 / 16 / 22 / 28 / 999 |
+## Colour (tokens in `web/src/styles/noir.css`)
+- Surfaces `--bg #0b0908` → `--surface` → `--raised` → `--elevated`. Text `--text #f4ede0` (ivory).
+- Accent `--gold` / `--grad-gold`. Used for primary actions, progress, rings, focus and rank numerals. Never for large fills.
+- `--amb-*` is tweened from the artwork on screen and only tints backgrounds and glows (muted on purpose).
+- Light theme is a warm paper variant of the same tokens.
 
-## Signature moments
+## Signature components
+- **Coverflow hero** (`Hero.tsx`): 3D poster arc over a blurred, colour-matched backdrop. Drag with inertia, tap side poster to focus, tap centre to open.
+- **Top ten** (`RankCard`): outlined Bodoni numerals tucked behind the poster.
+- **Continue watching** (`ContinueCard`): circular gold progress ring around the play button.
+- **Performers** (`PersonCard`): gold conic story ring that spins on hover.
+- **Bento browse** (`Bento`): wide / tall / small tiles that always tile to a clean rectangle.
+- **Dock**: floating gold-hairline capsule with a liquid indicator (GSAP squash-and-stretch).
+- **Player**: serif title, gold scrubber, swipe-down to minimise, right edge = volume, left edge = brightness.
+- **Lock screen**: monogram crest, diamond pin dots, gold keypad, three.js aurora.
 
-1. **Hero**: full-bleed under a transparent header, story-style progress bars (one per featured title, restart with the auto-advance timer, pause on touch), Ken Burns image, serif title, swipe left/right. Image and copy drift with scroll (CSS scroll-timeline, progressive).
-2. **Rails**: snap rows with edge fades; prev/next arrows on pointer devices; cards stagger in when their section enters the viewport (`useReveal` + `data-reveal`).
-3. **Dock**: floating glass pill tab bar on phones, ember dot under the active tab; side rail on desktop.
-4. **Cards**: lift + soft spotlight on hover, ember progress line, title scrim.
-5. **Detail pages**: serif title, parallax backdrop, glass play bar.
+## Motion rules
+- GSAP drives everything that moves (`src/motion`). Animate transform and opacity only.
+- Shared-element poster transition into the detail page (`motion/transition.ts`).
+- `prefers-reduced-motion` and low-power devices skip decorative motion and the WebGL aurora.
+- Append `?fx=1` to force effects on (testing only).
 
 ## Rules
-
-- Animate transform and opacity only. Hover transforms are never owned by entrance animations (entrance uses `backwards` fill).
-- `prefers-reduced-motion` disables ken-burns, parallax, stagger and progress animation.
-- 44px+ tap targets, ivory focus ring, AA contrast on all text.
-- Light theme tokens still work (`[data-theme='light']`).
-
-## Anti-patterns avoided
-
-- Purple/magenta gradients, glow on every control, default system or Inter type.
+- One accent colour. No emoji icons. Hit targets ≥ 44px. Text contrast ≥ 4.5:1.
+- Posters 8px radius, cards and sheets 12–26px, controls pill.

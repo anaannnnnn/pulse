@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Delete } from 'lucide-react';
 import { api } from '../api';
 import { cx } from '../lib/format';
+import { AuroraCanvas } from '../fx/AuroraCanvas';
+import { gsap, reduced } from '../motion/gsap';
+import { setAmbient } from '../motion/ambient';
 
 const LETTERS: Record<string, string> = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
 const buzz = (ms: number | number[]) => {
@@ -107,10 +110,27 @@ export function LockScreen({ onUnlocked, pinLength }: { onUnlocked: () => void |
     };
   }, [press, back, submit, max, len]);
 
+  const gateRef = useRef<HTMLElement>(null);
+  // entrance: logo pops with pulse rings, copy and keys cascade in
+  useEffect(() => {
+    void setAmbient(null, 'pulse-lock');
+    const g = gateRef.current;
+    if (!g || reduced()) return;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+      tl.from('.lock-card .brand-mark', { scale: 0.3, rotate: -40, opacity: 0, duration: 1.1, ease: 'back.out(2)' })
+        .from('.lock-card h1, .lock-card .body-s', { y: 22, opacity: 0, duration: 0.8, stagger: 0.08 }, 0.2)
+        .from('.keypad button', { y: 36, opacity: 0, duration: 0.7, stagger: 0.035, clearProps: 'transform,opacity' }, 0.4);
+      gsap.to('.lock-card .brand-mark', { y: -4, duration: 2.4, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+    }, g);
+    return () => ctx.revert();
+  }, []);
+
   const dots = len ?? Math.max(4, pin.length);
   const left = Math.max(0, Math.ceil((waitUntil - now) / 1000));
   return (
-    <main className="gate" aria-label="Pulse is locked">
+    <main className="gate" aria-label="Pulse is locked" ref={gateRef}>
+      <AuroraCanvas className="gate-aurora" intensity={1.05} scale={0.55} />
       <div className="aurora" aria-hidden>
         <i />
         <i />

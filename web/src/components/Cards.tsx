@@ -99,56 +99,25 @@ export function ContinueCard({ item }: { item: Item }) {
   );
 }
 
-/** Ranked "Top ten" card: an oversized outlined numeral tucked behind the poster. */
-export function RankCard({ item, rank }: { item: Item; rank: number }) {
-  const { prefs } = usePrefs();
-  const ref = useRef<HTMLAnchorElement>(null);
-  const artRef = useRef<HTMLDivElement>(null);
-  useTilt(artRef, { max: 7, scale: 1.04 });
-  return (
-    <Link ref={ref} to={`/scene/${item.id}`} onClick={() => rememberPoster(ref.current)} className={cx('rank-card', prefs.blurThumbs && 'blur')} aria-label={`Number ${rank}: ${item.title}`}>
-      <span className={cx("no", rank >= 10 && "two")} aria-hidden>{rank}</span>
-      <div className="art" ref={artRef}>
-        <Cover src={itemPoster(item)} alt="" seed={item.id} label={!item.scene ? item.name : undefined} />
-        <span className="glare" aria-hidden />
-      </div>
-    </Link>
-  );
-}
-
 const MOODS = [
-  ['#5a1426', '#14060a'],
-  ['#0f3a35', '#05100f'],
-  ['#2b2150', '#0a0716'],
-  ['#5a3a12', '#140c04'],
-  ['#4a1a3c', '#12060e'],
-  ['#1c2d4d', '#070b14'],
+  ['#7c4dff', '#2a1458'],
+  ['#c04fd8', '#3a1450'],
+  ['#4f7cff', '#162358'],
+  ['#9a6bff', '#241049'],
+  ['#d05cae', '#40143a'],
+  ['#5fb0ff', '#10304f'],
 ];
 
-/** Bento browse grid: wide / tall / small tiles that always tile into a clean rectangle. */
-export function Bento({ tags }: { tags: { id: number; name: string; c?: number }[] }) {
+/** Category card: glass tile with a glowing initial, used for tags. */
+export function CatCard({ tag, index }: { tag: { id: number; name: string; c?: number }; index: number }) {
   const nav = useNavigate();
-  const SHAPES = ['w', 't', 's', 's', 'w', 's', 's', 'w'];
-  const area = (s: string) => (s === 's' ? 1 : 2);
-  let k = 0, sum = 0;
-  for (let n = 1; n <= Math.min(tags.length, SHAPES.length); n++) {
-    sum += area(SHAPES[n - 1]);
-    if (sum % 2 === 0) k = n;
-  }
-  const list = tags.slice(0, k);
+  const [a, b] = MOODS[(hash(String(tag.id)) + index) % MOODS.length];
   return (
-    <div className="bento">
-      {list.map((t, n) => {
-        const [a, b] = MOODS[(hash(String(t.id)) + n) % MOODS.length];
-        return (
-          <button key={t.id} className={cx('tile', SHAPES[n])} style={{ ['--a' as string]: a, ['--b' as string]: b }} onClick={() => nav(`/library?tags=${t.id}`)}>
-            <span className="tn mono">{String(n + 1).padStart(2, '0')}</span>
-            <span className="tt clamp-2">{t.name}</span>
-            {t.c != null && <span className="tc mono">{t.c} {t.c === 1 ? 'film' : 'films'}</span>}
-          </button>
-        );
-      })}
-    </div>
+    <button className="cat-card" style={{ ['--a' as string]: a, ['--b' as string]: b }} onClick={() => nav(`/library?tags=${tag.id}`)}>
+      <span className="ci" aria-hidden>{tag.name.slice(0, 1)}</span>
+      <span className="cn clamp-2">{tag.name}</span>
+      {tag.c != null && <span className="cc">{tag.c} {tag.c === 1 ? 'video' : 'videos'}</span>}
+    </button>
   );
 }
 

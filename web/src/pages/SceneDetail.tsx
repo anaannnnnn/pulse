@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Heart, Bookmark, Play, Wand2, ExternalLink, Subtitles } from 'lucide-react';
+import { ArrowLeft, Heart, Bookmark, Play, Wand2, ExternalLink, Subtitles, Clock, MonitorPlay, Building2, CalendarDays } from 'lucide-react';
 import { api } from '../api';
 import { Cover } from '../components/Art';
 import { PersonCard, SceneCard } from '../components/Cards';
@@ -164,6 +164,16 @@ export default function SceneDetail() {
             )}
           </div>
         )}
+
+        <div className="feat">
+          <h3 className="feat-h">At a glance</h3>
+          <div className="feat-grid">
+            <span><Clock size={22} /><b>{fmtDuration(it.duration) || '—'}</b><em>Runtime</em></span>
+            <span><MonitorPlay size={22} /><b>{it.resolution || 'HD'}</b><em>Quality</em></span>
+            <span><Building2 size={22} /><b className="clamp-1">{sc?.site?.name || 'Library'}</b><em>Studio</em></span>
+            <span><CalendarDays size={22} /><b>{sc?.date ? sc.date.slice(0, 4) : '—'}</b><em>Released</em></span>
+          </div>
+        </div>
       </div>
 
       {sc && sc.performers.length > 0 && (

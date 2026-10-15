@@ -1,33 +1,26 @@
-# Pulse · Maison Noir (design system)
+# Pulse · Violet Glass (design system)
 
-A luxury-cinema look: warm black, ivory type, champagne gold as the only accent.
+Deep aubergine black, frosted glass surfaces, one violet accent. Tokens and shapes live in `web/src/styles/violet.css`.
 
-## Type
-- Display: **Bodoni Moda** (titles, numerals, italic accents). Self-hosted in `web/public/fonts`.
-- UI: **Hanken Grotesk**. Labels, counters, timestamps: **DM Mono**, uppercase, wide tracking.
+## Type (self-hosted in `web/public/fonts`)
+- Display: **Unbounded** (wide geometric, weights 500-700, tight tracking). Titles, numerals, wordmark.
+- UI: **Outfit** (geometric sans). If you own a licensed face (Batica, Varien, Polea…), drop the file in `public/fonts` and change `--font-display` / `--font-sans`.
 
-## Colour (tokens in `web/src/styles/noir.css`)
-- Surfaces `--bg #0b0908` → `--surface` → `--raised` → `--elevated`. Text `--text #f4ede0` (ivory).
-- Accent `--gold` / `--grad-gold`. Used for primary actions, progress, rings, focus and rank numerals. Never for large fills.
-- `--amb-*` is tweened from the artwork on screen and only tints backgrounds and glows (muted on purpose).
-- Light theme is a warm paper variant of the same tokens.
+## Colour
+- Surfaces `--bg #0c0913` → `--surface` → `--raised` → `--elevated`; glass = `--glass-bg` + 1px `--line-2` + blur.
+- Accent `--v` / `--grad-v` (violet) for primary actions, progress, rings and focus. Text is lavender-white.
+- `--amb-*` is tweened from the artwork on screen and only tints backgrounds and glows.
 
-## Signature components
-- **Coverflow hero** (`Hero.tsx`): 3D poster arc over a blurred, colour-matched backdrop. Drag with inertia, tap side poster to focus, tap centre to open.
-- **Top ten** (`RankCard`): outlined Bodoni numerals tucked behind the poster.
-- **Continue watching** (`ContinueCard`): circular gold progress ring around the play button.
-- **Performers** (`PersonCard`): gold conic story ring that spins on hover.
-- **Bento browse** (`Bento`): wide / tall / small tiles that always tile to a clean rectangle.
-- **Dock**: floating gold-hairline capsule with a liquid indicator (GSAP squash-and-stretch).
-- **Player**: serif title, gold scrubber, swipe-down to minimise, right edge = volume, left edge = brightness.
-- **Lock screen**: monogram crest, diamond pin dots, gold keypad, three.js aurora.
+## Components
+- Home: greeting, pill search, category circles, glass banner hero (swipe, story dots), stats row, rails, category cards.
+- Cards: 20px radius glass poster cards with tilt + glare. Continue-watching with progress ring. Performers with violet story rings.
+- Dock: frosted capsule with a liquid violet indicator (GSAP squash-and-stretch).
+- Detail: full-bleed art, glass chips, violet Play pill, "At a glance" tiles.
+- Player: violet scrubber, swipe-down to minimise, right edge volume, left edge brightness.
+- Lock screen: violet app icon, glass keypad, three.js aurora.
 
-## Motion rules
-- GSAP drives everything that moves (`src/motion`). Animate transform and opacity only.
-- Shared-element poster transition into the detail page (`motion/transition.ts`).
-- `prefers-reduced-motion` and low-power devices skip decorative motion and the WebGL aurora.
-- Append `?fx=1` to force effects on (testing only).
+## Motion
+GSAP drives movement (`src/motion`): transform and opacity only. Shared-element poster transition into detail. `prefers-reduced-motion` and low-power devices skip decorative motion and WebGL. `?fx=1` forces effects on (testing).
 
 ## Rules
-- One accent colour. No emoji icons. Hit targets ≥ 44px. Text contrast ≥ 4.5:1.
-- Posters 8px radius, cards and sheets 12–26px, controls pill.
+Hit targets ≥ 44px. Text contrast ≥ 4.5:1. One accent colour. No emoji icons.

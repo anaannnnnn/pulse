@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, CloudCog, ChevronRight, Settings2 } from 'lucide-react';
+import { Search, CloudCog, ChevronRight, Settings2, LayoutGrid, Film, HardDrive, Sparkles, Flame, Heart, Star, Zap, Gem, Crown, Moon, Sun, Music } from 'lucide-react';
+
+const CAT_ICONS = [Flame, Heart, Star, Zap, Gem, Crown, Moon, Sun, Music];
 import { api, isMock, type Item } from '../api';
-import { SceneCard, ContinueCard, PersonCard, RankCard, Bento } from '../components/Cards';
+import { SceneCard, ContinueCard, PersonCard, CatCard } from '../components/Cards';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { Rail } from '../components/Rail';
 import { useRailReveal } from '../motion/hooks';
 import { Hero } from '../components/Hero';
+import { fmtBytes } from '../lib/format';
 import { CardSkeletons, EmptyState, ErrorState, SectionHead, Skeleton } from '../components/ui';
 
 function greeting() {
@@ -40,22 +43,28 @@ export default function Home() {
   return (
     <main className="page home">
       <header className="topbar">
-        <div className="grow">
-          <div className="overline">{greeting()}</div>
-          <h1 className="h1 wordmark">Pulse<i>.</i></h1>
-        </div>
-        <button className="icon-btn" aria-label="Search library" onClick={() => setSearch(true)}>
-          <Search size={20} />
-        </button>
         <Link className="icon-btn" aria-label="Settings" to="/settings">
           <Settings2 size={20} />
         </Link>
+        <div className="grow" />
+        <button className="icon-btn" aria-label="Search library" onClick={() => setSearch(true)}>
+          <Search size={20} />
+        </button>
+        <Link className="avatar-btn" aria-label="Settings" to="/settings">P</Link>
       </header>
+      <div className="greet">
+        <div className="hi">{greeting()}</div>
+        <h1 className="h1">Stream tonight,<br /><em>on your terms.</em></h1>
+      </div>
+      <button className="search-pill" onClick={() => setSearch(true)} aria-label="Search library">
+        <span>Search titles, stars, studios…</span>
+        <span className="go"><Search size={18} /></span>
+      </button>
       {search && <SearchOverlay onClose={() => setSearch(false)} />}
 
       {q.isLoading && (
         <>
-          <Skeleton h={640} r={0} style={{ margin: '-12px calc(-1 * var(--page-x)) 0' }} />
+          <Skeleton h={300} r={30} style={{ marginTop: 24 }} />
           <div className="section">
             <CardSkeletons rail n={4} />
           </div>
@@ -77,23 +86,29 @@ export default function Home() {
       )}
       {d && d.stats.items > 0 && (
         <>
+          {d.tags.length > 0 && (
+            <div className="cats" aria-label="Browse categories">
+              <Link to="/library" className="cat on"><span className="cc"><LayoutGrid size={22} /></span><span>All</span></Link>
+              {d.tags.slice(0, 9).map((t, n) => {
+                const Ic = CAT_ICONS[n % CAT_ICONS.length];
+                return (
+                <Link key={t.id} to={`/library?tags=${t.id}`} className="cat"><span className="cc"><Ic size={22} /></span><span className="clamp-1">{t.name}</span></Link>
+                );
+              })}
+            </div>
+          )}
           {d.featured.length > 0 && <Hero items={d.featured} />}
+          <div className="trust">
+            <span><Film size={20} /><i><b>{d.stats.items}</b>videos</i></span>
+            <span><HardDrive size={20} /><i><b>{d.stats.bytes != null ? fmtBytes(d.stats.bytes) : '—'}</b>stored</i></span>
+            <span><Sparkles size={20} /><i><b>{d.stats.matched ?? 0}</b>matched</i></span>
+          </div>
           {d.continueWatching.length > 0 && (
             <section className="section">
               <SectionHead title="Continue watching" />
               <Rail col="276px" label="Continue watching">
                 {d.continueWatching.map((it) => (
                   <ContinueCard key={it.id} item={it} />
-                ))}
-              </Rail>
-            </section>
-          )}
-          {d.recentlyAdded.length >= 3 && (
-            <section className="section">
-              <SectionHead title="Top ten tonight" kicker="Ranked from your library" />
-              <Rail col="196px" label="Top ten">
-                {d.recentlyAdded.slice(0, 10).map((it, n) => (
-                  <RankCard key={it.id} item={it} rank={n + 1} />
                 ))}
               </Rail>
             </section>
@@ -108,8 +123,12 @@ export default function Home() {
           </section>
           {d.tags.length > 3 && (
             <section className="section">
-              <SectionHead title="Browse by mood" kicker="Collections" action={<Link className="see-all" to="/library">All <ChevronRight size={14} /></Link>} />
-              <Bento tags={d.tags} />
+              <SectionHead title="Top categories" action={<Link className="see-all" to="/library">View all <ChevronRight size={14} /></Link>} />
+              <Rail col="132px" label="Top categories">
+                {d.tags.slice(0, 10).map((t, n) => (
+                  <CatCard key={t.id} tag={t} index={n} />
+                ))}
+              </Rail>
             </section>
           )}
           {d.performers.length > 0 && (

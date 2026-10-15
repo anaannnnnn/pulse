@@ -218,10 +218,13 @@ export function Confidence({ value }: { value: number | null | undefined }) {
   );
 }
 
-export function SectionHead({ title, action }: { title: string; action?: ReactNode }) {
+export function SectionHead({ title, action, kicker }: { title: string; action?: ReactNode; kicker?: string }) {
   return (
     <div className="section-head">
-      <h2 className="h3 clamp-1">{title}</h2>
+      <div className="sh-t">
+        {kicker && <span className="sh-k">{kicker}</span>}
+        <h2 className="h3 clamp-1">{title}</h2>
+      </div>
       {action}
     </div>
   );

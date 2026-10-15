@@ -1,144 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Play, Info, Search, CloudCog, ChevronRight, Settings2 } from 'lucide-react';
+import { Search, CloudCog, ChevronRight, Settings2, LayoutGrid, Film, HardDrive, Sparkles, Flame, Heart, Star, Zap, Gem, Crown, Moon, Sun, Music } from 'lucide-react';
+
+const CAT_ICONS = [Flame, Heart, Star, Zap, Gem, Crown, Moon, Sun, Music];
 import { api, isMock, type Item } from '../api';
-import { SceneCard, ContinueCard, PersonCard } from '../components/Cards';
+import { SceneCard, ContinueCard, PersonCard, CatCard } from '../components/Cards';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { Rail } from '../components/Rail';
-import { useReveal } from '../lib/useReveal';
-import { Cover } from '../components/Art';
-import { CardSkeletons, Chip, EmptyState, ErrorState, SectionHead, Skeleton } from '../components/ui';
-import { usePlayer } from '../player/PlayerContext';
-import { itemSource } from '../lib/play';
-import { cx, fmtDuration, fmtDate } from '../lib/format';
-import { usePrefs } from '../lib/prefs';
+import { useRailReveal } from '../motion/hooks';
+import { Hero } from '../components/Hero';
+import { fmtBytes } from '../lib/format';
+import { CardSkeletons, EmptyState, ErrorState, SectionHead, Skeleton } from '../components/ui';
 
 function greeting() {
   const h = new Date().getHours();
   return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-const FEATURE_MS = 7000;
-
-function Hero({ items }: { items: Item[] }) {
-  const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [hover, setHover] = useState(false);
-  const [epoch, setEpoch] = useState(0);
-  const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const held = paused || hover || reduce;
-  const player = usePlayer();
-  const nav = useNavigate();
-  const { prefs } = usePrefs();
-  const origin = useRef<{ x: number; y: number } | null>(null);
-  useEffect(() => {
-    if (items.length < 2 || held) return;
-    setEpoch((e) => e + 1);
-    const t = setInterval(() => setI((x) => (x + 1) % items.length), FEATURE_MS);
-    return () => clearInterval(t);
-  }, [items.length, held]);
-  const it = items[i];
-  if (!it) return null;
-  const step = (dir: number) => setI((x) => (x + dir + items.length) % items.length);
-  return (
-    <section
-      className={cx('hero', prefs.blurThumbs && 'blur')}
-      style={{ ['--feat-ms' as string]: `${FEATURE_MS}ms` }}
-      aria-roledescription="carousel"
-      aria-label="Featured"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocus={() => setHover(true)}
-      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setHover(false)}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowRight') step(1);
-        if (e.key === 'ArrowLeft') step(-1);
-      }}
-      onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest('button')) return;
-        setPaused(true);
-        origin.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerUp={(e) => {
-        const o = origin.current;
-        origin.current = null;
-        if (o && Math.abs(e.clientX - o.x) > 48 && Math.abs(e.clientX - o.x) > Math.abs(e.clientY - o.y)) step(e.clientX < o.x ? 1 : -1);
-        window.setTimeout(() => setPaused(false), 2800);
-      }}
-      onPointerCancel={() => {
-        origin.current = null;
-        setPaused(false);
-      }}
-    >
-      <div className="hero-media">
-        <div className="hero-parallax" key={it.id}>
-          <Cover src={it.scene?.background || it.scene?.poster} alt="" seed={it.id} eager />
-        </div>
-      </div>
-      <div className="aurora" aria-hidden>
-        <i />
-        <i />
-        <i />
-      </div>
-      <div className="hero-grain" aria-hidden />
-      <div className="content">
-        <div className="hero-progress" role="tablist" aria-label="Featured titles">
-          {items.map((x, n) => (
-            <button
-              key={x.id}
-              role="tab"
-              aria-selected={n === i}
-              aria-label={`Show featured ${n + 1} of ${items.length}`}
-              className={cx(n < i && 'done', n === i && 'on', n === i && held && 'held')}
-              onClick={() => {
-                setI(n);
-                setPaused(true);
-                window.setTimeout(() => setPaused(false), 2800);
-              }}
-            >
-              <i key={n === i ? epoch : 0} />
-            </button>
-          ))}
-        </div>
-        <span className="hero-eyebrow">
-          <b className="live-dot" aria-hidden />
-          Featured
-          <span className="sep" aria-hidden />
-          {it.scene?.site?.name || 'Your library'}
-        </span>
-        <h2 className="title clamp-3" key={`t-${it.id}`}>
-          {it.title}
-        </h2>
-        <div className="hero-meta" key={`m-${it.id}`}>
-          {it.scene?.performers.slice(0, 2).map((p) => p.name).join(' & ') && <span>{it.scene?.performers.slice(0, 2).map((p) => p.name).join(' & ')}</span>}
-          {it.scene?.date && <span>{fmtDate(it.scene?.date)}</span>}
-          {it.duration ? <span>{fmtDuration(it.duration)}</span> : null}
-          {it.resolution && /2160|4k/i.test(it.resolution) ? <span className="pill-4k">4K</span> : null}
-        </div>
-        <div className="actions hero-actions">
-          <button className="btn btn-primary btn-lg" onClick={() => player.play(itemSource(it, items))}>
-            <Play size={18} fill="currentColor" /> {it.progress && !it.progress.completed ? 'Resume' : 'Play'}
-          </button>
-          <button className="btn btn-secondary btn-lg" onClick={() => nav(`/scene/${it.id}`)}>
-            <Info size={18} /> Details
-          </button>
-          <span className="hero-count" aria-hidden>
-            {String(i + 1).padStart(2, '0')}<em>/{String(items.length).padStart(2, '0')}</em>
-          </span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export default function Home() {
   const q = useQuery({ queryKey: ['home'], queryFn: api.home });
   const client = useQueryClient();
-  const nav = useNavigate();
   const [search, setSearch] = useState(false);
   const d = q.data;
-  useReveal();
+  useRailReveal([d?.stats.items, d?.rails.length]);
   useEffect(() => {
     const on = () => q.refetch();
     window.addEventListener('pulse-refresh', on);
@@ -158,22 +43,28 @@ export default function Home() {
   return (
     <main className="page home">
       <header className="topbar">
-        <div className="grow">
-          <div className="overline">{greeting()}</div>
-          <h1 className="h1">Tonight</h1>
-        </div>
-        <button className="icon-btn" aria-label="Search library" onClick={() => setSearch(true)}>
-          <Search size={20} />
-        </button>
         <Link className="icon-btn" aria-label="Settings" to="/settings">
           <Settings2 size={20} />
         </Link>
+        <div className="grow" />
+        <button className="icon-btn" aria-label="Search library" onClick={() => setSearch(true)}>
+          <Search size={20} />
+        </button>
+        <Link className="avatar-btn" aria-label="Settings" to="/settings">P</Link>
       </header>
+      <div className="greet">
+        <div className="hi">{greeting()}</div>
+        <h1 className="h1">Stream tonight,<br /><em>on your terms.</em></h1>
+      </div>
+      <button className="search-pill" onClick={() => setSearch(true)} aria-label="Search library">
+        <span>Search titles, stars, studios…</span>
+        <span className="go"><Search size={18} /></span>
+      </button>
       {search && <SearchOverlay onClose={() => setSearch(false)} />}
 
       {q.isLoading && (
         <>
-          <Skeleton h={520} r={28} style={{ marginTop: 64 }} />
+          <Skeleton h={300} r={30} style={{ marginTop: 24 }} />
           <div className="section">
             <CardSkeletons rail n={4} />
           </div>
@@ -195,28 +86,34 @@ export default function Home() {
       )}
       {d && d.stats.items > 0 && (
         <>
-          {d.featured.length > 0 && <Hero items={d.featured} />}
           {d.tags.length > 0 && (
-            <div className="chips mt-16" aria-label="Browse categories">
-              <Chip on onClick={() => nav('/library')}>All</Chip>
-              {d.tags.slice(0, 10).map((t) => (
-                <Chip key={t.id} onClick={() => nav(`/library?tags=${t.id}`)}>
-                  {t.name}
-                </Chip>
-              ))}
+            <div className="cats" aria-label="Browse categories">
+              <Link to="/library" className="cat on"><span className="cc"><LayoutGrid size={22} /></span><span>All</span></Link>
+              {d.tags.slice(0, 9).map((t, n) => {
+                const Ic = CAT_ICONS[n % CAT_ICONS.length];
+                return (
+                <Link key={t.id} to={`/library?tags=${t.id}`} className="cat"><span className="cc"><Ic size={22} /></span><span className="clamp-1">{t.name}</span></Link>
+                );
+              })}
             </div>
           )}
+          {d.featured.length > 0 && <Hero items={d.featured} />}
+          <div className="trust">
+            <span><Film size={20} /><i><b>{d.stats.items}</b>videos</i></span>
+            <span><HardDrive size={20} /><i><b>{d.stats.bytes != null ? fmtBytes(d.stats.bytes) : '—'}</b>stored</i></span>
+            <span><Sparkles size={20} /><i><b>{d.stats.matched ?? 0}</b>matched</i></span>
+          </div>
           {d.continueWatching.length > 0 && (
-            <section className="section" data-reveal>
+            <section className="section">
               <SectionHead title="Continue watching" />
-              <Rail col="264px" label="Continue watching">
+              <Rail col="276px" label="Continue watching">
                 {d.continueWatching.map((it) => (
                   <ContinueCard key={it.id} item={it} />
                 ))}
               </Rail>
             </section>
           )}
-          <section className="section" data-reveal>
+          <section className="section">
             <SectionHead title="Recently added" action={<Link className="see-all" to="/library?sort=added">See all <ChevronRight size={14} /></Link>} />
             <Rail label="Recently added">
               {d.recentlyAdded.map((it) => (
@@ -224,8 +121,18 @@ export default function Home() {
               ))}
             </Rail>
           </section>
+          {d.tags.length > 3 && (
+            <section className="section">
+              <SectionHead title="Top categories" action={<Link className="see-all" to="/library">View all <ChevronRight size={14} /></Link>} />
+              <Rail col="132px" label="Top categories">
+                {d.tags.slice(0, 10).map((t, n) => (
+                  <CatCard key={t.id} tag={t} index={n} />
+                ))}
+              </Rail>
+            </section>
+          )}
           {d.performers.length > 0 && (
-            <section className="section" data-reveal>
+            <section className="section">
               <SectionHead title="Performers" action={<Link className="see-all" to="/library?tab=performers">See all <ChevronRight size={14} /></Link>} />
               <Rail col="132px" label="Performers">
                 {d.performers.map((p) => (
@@ -235,7 +142,7 @@ export default function Home() {
             </section>
           )}
           {d.rails.map((r) => (
-            <section className="section" key={r.id} data-reveal>
+            <section className="section" key={r.id}>
               <SectionHead
                 title={r.title}
                 action={
@@ -252,7 +159,7 @@ export default function Home() {
             </section>
           ))}
           {d.watchlist.length > 0 && (
-            <section className="section" data-reveal>
+            <section className="section">
               <SectionHead title="Watchlist" action={<Link className="see-all" to="/favorites?list=watchlist">See all <ChevronRight size={14} /></Link>} />
               <Rail label="Watchlist">
                 {d.watchlist.map((it) => (
